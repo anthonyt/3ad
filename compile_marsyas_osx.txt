@@ -1,0 +1,11 @@
+cd marsyas-0.2.17 &&
+rm -rf build &&
+mkdir build &&
+cd build &&
+ccmake ../src/ &&
+cmake -G "Unix Makefiles" ../src/ &&
+# brute force replace the -framework Python directive with the path to python2.5 &&
+find . -type f -exec sed -i -e 's:/System/Library/Frameworks/Python.framework/Headers:/opt/local/Library/Frameworks/Python.framework/Versions/2.5/include/python2.5:' {} \; &&
+find . -type f -exec sed -i -e 's:-framework Python:/opt/local/Library/Frameworks/Python.framework/Versions/2.5/Python:' {} \; &&
+find . -name "*-e" | xargs rm
+
