@@ -48,7 +48,6 @@ audiofiles_tags = Table(
 )
 
 
-metadata.create_all(engine)
 
 class Plugin(object):
 	def __init__(self, name, modulename):
@@ -113,4 +112,8 @@ mapper(
 		'files': relation(AudioFile, secondary=audiofiles_tags)
 	}
 )
+
+Session = sessionmaker(bind=engine, autoflush=True, transactional=True)
+session = Session()
+
 
