@@ -45,12 +45,18 @@ class Tag(object):
 class Database(object):
 	__shared_state = {'session': None}
 
-	def create_metadata(self):
-		metadata = MetaData()
+	def createTables(self):
+		return self.metadata.create_all(self.engine)
+
+	def saveObject(self, object):
+		return self.session.save(object)
+
+	def __create_metadata(self):
+		self.metadata = MetaData()
 
 		self.plugins_table = Table(
 			'plugins',
-			metadata,
+			self.metadata,
 			Column('id', Integer, primary_key=True),
 			Column('name', String(255)),
 			Column('modulename', String(255))
@@ -58,7 +64,7 @@ class Database(object):
 
 		self.output_table = Table(
 			'output',
-			metadata,
+			self.metadata,
 			Column('id', Integer, primary_key=True),
 			Column('plugin_id', Integer, ForeignKey('plugins.id')),
 			Column('audiofile_id', Integer, ForeignKey('audiofiles.id')),
@@ -67,27 +73,27 @@ class Database(object):
 
 		self.audiofiles_table = Table(
 			'audiofiles',
-			metadata,
+			self.metadata,
 			Column('id', Integer, primary_key=True),
 			Column('filename', String(255))
 		)
 
 		self.tags_table = Table(
 			'tags',
-			metadata,
+			self.metadata,
 			Column('id', Integer, primary_key=True),
 			Column('name', String(255))
 		)
 
 		self.audiofiles_tags = Table(
 			'audiofiles_tags',
-			metadata,
+			self.metadata,
 			Column('audiofile_id', Integer, ForeignKey('audiofiles.id')),
 			Column('tag_id', Integer, ForeignKey('tags.id'))
 		)
 
 
-	def create_mappings(self):
+	def __create_mappings(self):
 		mapper(
 			Plugin,
 			self.plugins_table
@@ -124,8 +130,8 @@ class Database(object):
 		if self.session == None:
 			self.engine = create_engine('mysql://root:@localhost/3ad', echo=True)
 
-			self.create_metadata();
-			self.create_mappings();
+			self.__create_metadata();
+			self.__create_mappings();
 
 			Session = sessionmaker(bind=self.engine, autoflush=True, transactional=True)
 			self.session = Session()
