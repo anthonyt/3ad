@@ -48,6 +48,7 @@ class AudioFile(object):
 class Tag(object):
 	def __init__(self, name):
 		self.name = name
+		self.vector = None
 
 	def __repr__(self):
 		return "<Tag('%s')>" % (self.name)
@@ -93,7 +94,8 @@ class Database(object):
 			'tags',
 			self.metadata,
 			Column('id', Integer, primary_key=True),
-			Column('name', String(255))
+			Column('name', String(255)),
+			Column('vector', PickleType)
 		)
 
 		self.audiofiles_tags = Table(
