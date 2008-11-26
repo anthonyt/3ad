@@ -17,9 +17,9 @@ for tag in tags:
 
 # Second, our demo files
 files = [
-	AudioFile("Cello note a.wav"),
-	AudioFile("Cello note c.wav"),
-	AudioFile("Cello note g.wav")
+	AudioFile("audio/Cello note a.wav"),
+	AudioFile("audio/Cello note c.wav"),
+	AudioFile("audio/Cello note g.wav")
 ]
 
 for file in files:
@@ -27,6 +27,14 @@ for file in files:
 		file.tags.append(tag)
 	db.saveObject(file)
 
-# print out the data that we just entered.
+# Third, set up the default plugins
+plugins = [
+	Plugin('charlotte', 'plugins.charlotte')
+]
+
+for plugin in plugins:
+	db.saveObject(plugin)
+
+# Finally, print out the data that we just entered.
 for file in db.session.query(AudioFile):
 	print file, file.tags

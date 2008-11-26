@@ -9,18 +9,29 @@ class Plugin(object):
 	def __init__(self, name, modulename):
 		self.name = name
 		self.modulename = modulename
-		self.module = __import__(modulename)
+		self.__setupModule()
+
+	def __setupModule(self):
+		if not hasattr(self, 'module'):
+			mod = __import__(self.modulename)
+			components = self.modulename.split('.')
+			for comp in components[1:]:
+				mod = getattr(mod, comp)
+			self.module = mod
 
 	def __repr__(self):
-		return "<Plugin('%s','%s', '%s')>" % (self.name, self.modulename)
+		return "<Plugin('%s','%s')>" % (self.name, self.modulename)
 
-	def createData(inputFile):
-		return self.module.createData(inputFile)
+	def createVector(self, audiofile):
+		self.__setupModule()
+		return PluginOutput(self.module.createVector(audiofile.filename), self, audiofile)
 
 
 class PluginOutput(object):
-	def __init__(self, vector):
+	def __init__(self, vector, plugin, audiofile):
 		self.vector = vector
+		self.plugin = plugin
+		self.file = audiofile
 
 	def __repr__(self):
 		return "<PluginOutput('%s')>" % (self.vector)
