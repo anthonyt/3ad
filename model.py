@@ -3,6 +3,7 @@ from sqlalchemy import Table, Column, Integer, String, PickleType, MetaData, For
 from sqlalchemy.orm import mapper
 from sqlalchemy.orm import relation
 from sqlalchemy.orm import sessionmaker
+from numpy import mean, array, dot, sqrt
 
 
 class Plugin(object):
@@ -44,6 +45,15 @@ class AudioFile(object):
 	def __repr__(self):
 		return "<AudioFile('%s')>" % (self.filename)
 
+	def __getattr__(self, name):
+		if name == "vector":
+			vector = []
+			for output in self.outputs:
+				vector.extend(output.vector)
+			return vector
+		else:
+			raise AttributeError
+
 
 class Tag(object):
 	def __init__(self, name):
@@ -53,6 +63,13 @@ class Tag(object):
 	def __repr__(self):
 		return "<Tag('%s')>" % (self.name)
 
+	def updateVector(self):
+		vectors = []
+		for file in self.files:
+			for output in file.outputs:
+				vectors.extend(output.vector)
+		self.vector = mean(array(vectors), axis=0)
+		return self.vector
 
 class Database(object):
 	__shared_state = {'session': None}
@@ -141,7 +158,7 @@ class Database(object):
 		self.__dict__ = self.__shared_state
 
 		if self.session == None:
-			self.engine = create_engine('mysql://root:@localhost/3ad', echo=True)
+			self.engine = create_engine('mysql://root:@localhost/3ad', echo=False)
 
 			self.__create_metadata();
 			self.__create_mappings();

@@ -20,6 +20,8 @@ files = [
 	AudioFile("audio/Cello note a.wav"),
 	AudioFile("audio/Cello note c.wav"),
 	AudioFile("audio/Cello note g.wav")
+#### ADD MORE AUDIO FILES HERE. THEN WE CAN TEST THE EUCLIDEAN DISTANCES
+#### FROM THE STRINGS TAGS WITH THE TEST SCRIPT. WHEE
 ]
 
 for file in files:
