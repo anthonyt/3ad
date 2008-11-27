@@ -1,4 +1,5 @@
 from model import *
+import os
 
 db = Database();
 
@@ -12,30 +13,27 @@ tags = [
 	Tag("cello")
 ]
 
+# Save all of the tags that don't already exist in the database.
 for tag in tags:
-	db.saveObject(tag)
+	if db.session.query(Tag).filter_by(name=tag.name).count() < 1:
+		db.saveObject(tag)
 
-# Second, our demo files
-files = [
-	AudioFile("audio/Cello note a.wav"),
-	AudioFile("audio/Cello note c.wav"),
-	AudioFile("audio/Cello note g.wav")
-#### ADD MORE AUDIO FILES HERE. THEN WE CAN TEST THE EUCLIDEAN DISTANCES
-#### FROM THE STRINGS TAGS WITH THE TEST SCRIPT. WHEE
-]
+# Create an audio file object for each file in the audio directory
+files = [AudioFile('audio/'+f) for f in os.listdir('./audio/')]
 
 for file in files:
-	for tag in tags:
-		file.tags.append(tag)
-	db.saveObject(file)
+	if db.session.query(AudioFile).filter_by(filename=file.filename).count() < 1:
+		db.saveObject(file)
 
 # Third, set up the default plugins
 plugins = [
 	Plugin('charlotte', 'plugins.charlotte')
 ]
 
+# Save all plugins that aren't already in the database.
 for plugin in plugins:
-	db.saveObject(plugin)
+	if db.session.query(Plugin).filter_by(modulename=plugin.modulename).count() < 1:
+		db.saveObject(plugin)
 
 # Finally, print out the data that we just entered.
 for file in db.session.query(AudioFile):
