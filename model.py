@@ -67,7 +67,7 @@ class Tag(object):
 		vectors = []
 		for file in self.files:
 			for output in file.outputs:
-				vectors.extend(output.vector)
+				vectors.append(output.vector)
 		self.vector = mean(array(vectors), axis=0)
 		return self.vector
 
