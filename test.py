@@ -22,14 +22,17 @@ for plugin in plugins:
 
 	# iterate over each file, generating new output.
 	for file in db.session.query(AudioFile):
+		print "Creating vector for", file, plugin
 		output = plugin.createVector(file);
 
 # Update the vector for every tag, based on the new output
 for tag in db.session.query(Tag):
+	print "Creating vector for", tag
 	tag.updateVector()
 
 # Calculate the distance of each file from each tag that it as associated with.
 # then print it.
 for file in db.session.query(AudioFile):
-	for tag in file.tags:
+	print ""
+	for tag in db.session.query(Tag):
 		print file, tag, euclidean_distance(tag.vector, file.vector)

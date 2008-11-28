@@ -46,6 +46,9 @@ def createVector(filename):
 	# Find the length of the song
 	slength = fnet.getControl("SoundFileSource/src/mrs_natural/size").to_natural()
 
+	if slength is 0:
+		raise Exception('InvalidLengthError')
+
 	# Find the number of samples resulting in a whole number of analysis windows by truncating
 	numsamps = int(((30*11250.0*factor)/512)*512)
 
@@ -88,7 +91,7 @@ def createVector(filename):
 	result.normMaxMin()
 
 	# convert from useless marsyas vector to numpy array to normal python list
-	result = array(result).tolist()
+	result = array(result) * 100;
 
-	return result
+	return result.tolist()
 

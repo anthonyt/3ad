@@ -19,11 +19,28 @@ for tag in tags:
 		db.saveObject(tag)
 
 # Create an audio file object for each file in the audio directory
-files = [AudioFile('audio/'+f) for f in os.listdir('./audio/')]
+input = open("files.txt", 'r')
+for line in input:
+	line = line.split(',')
+	fname = line[0]
+	if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
+		f = AudioFile(fname)
+		tags = filter(None, line[1].strip().split(' '))
+		for tag in tags:
+			tags = db.session.query(Tag).filter_by(name=tag)
+			if tags.count() < 1:
+				t = Tag(tag)
+				db.saveObject(t)
+			else:
+				t = tags.all()[0]
+			f.tags.append(t)
+		db.saveObject(f)
 
-for file in files:
-	if db.session.query(AudioFile).filter_by(filename=file.filename).count() < 1:
-		db.saveObject(file)
+#files = [AudioFile('audio/'+f) for f in os.listdir('./audio/')]
+
+#for file in files:
+#	if db.session.query(AudioFile).filter_by(filename=file.filename).count() < 1:
+#		db.saveObject(file)
 
 # Third, set up the default plugins
 plugins = [
