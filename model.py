@@ -125,6 +125,13 @@ class Database(object):
 			Column('tag_id', Integer, ForeignKey('tags.id'))
 		)
 
+		self.audiofiles_generatedtags = Table(
+			'audiofiles_generatedtags',
+			self.metadata,
+			Column('audiofile_id', Integer, ForeignKey('audiofiles.id')),
+			Column('tag_id', Integer, ForeignKey('tags.id'))
+		)
+
 
 	def __create_mappings(self):
 		mapper(
@@ -145,7 +152,8 @@ class Database(object):
 			AudioFile,
 			self.audiofiles_table,
 			properties = {
-				'tags': relation(Tag, secondary=self.audiofiles_tags)
+				'tags': relation(Tag, secondary=self.audiofiles_tags),
+				'generated_tags': relation(Tag, secondary=self.audiofiles_generatedtags)
 			}
 		)
 
@@ -153,7 +161,8 @@ class Database(object):
 			Tag,
 			self.tags_table,
 			properties = {
-				'files': relation(AudioFile, secondary=self.audiofiles_tags)
+				'files': relation(AudioFile, secondary=self.audiofiles_tags),
+				'detected_files': relation(AudioFile, secondary=self.audiofiles_generatedtags)
 			}
 		)
 
