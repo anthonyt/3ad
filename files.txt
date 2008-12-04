@@ -8,7 +8,6 @@ audio/drums.wav, noise drums
 audio/happy-wind-bed-100b.wav, wind
 audio/_01 Eine Kleine Nachtmusik I_ Allegro.m4a.wav,
 audio/_01 Jeux.m4a.wav, orchestra
-audio/_01 Jeux.wav, orchestra
 audio/_01 Night of Silence.m4a.wav, piano
 audio/_02 Aries' Theme.m4a.wav, piano
 audio/_02 Eine Kleine Nachtmusik II_ Romanze (Andante).m4a.wav, orchestra strings
