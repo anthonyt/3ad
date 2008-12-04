@@ -47,7 +47,7 @@ def createVector(filename):
 	slength = fnet.getControl("SoundFileSource/src/mrs_natural/size").to_natural()
 
 	if slength is 0:
-		raise Exception('InvalidLengthError')
+		raise Exception('InvalidLengthError', "File \"%s\" could not be read." % filename)
 
 	# Find the number of samples resulting in a whole number of analysis windows by truncating
 	numsamps = int(((30*11250.0*factor)/512)*512)
