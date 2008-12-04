@@ -77,6 +77,9 @@ class Database(object):
 	def createTables(self):
 		return self.metadata.create_all(self.engine)
 
+	def dropTables(self):
+		return self.metadata.drop_all(self.engine)
+
 	def saveObject(self, object):
 		return self.session.save(object)
 

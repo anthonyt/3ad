@@ -3,7 +3,10 @@ import os
 
 db = Database();
 
-# create the table
+# drop the old tables
+db.dropTables();
+
+# create the fresh tables
 db.createTables();
 
 # Create an audio file object for each file in the listings file
