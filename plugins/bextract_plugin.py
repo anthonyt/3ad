@@ -29,10 +29,7 @@ def createVector(filename):
 		fnet.tick()
 
 	result = fnet.getControl("mrs_realvec/processedData").to_realvec()
-	result.normMaxMin()
 
-	result = array(result) * 100
-	print result # always an array of zeroes. damn.
-
-	return result.tolist()
+	# use numpy to generate a list from the realvec
+	return array(result).tolist()
 
