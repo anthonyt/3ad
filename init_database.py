@@ -33,7 +33,7 @@ for line in input:
 # Set up the default plugins
 plugins = [
 	Plugin('charlotte', 'plugins.charlotte'),
-	Plugin('bextract', 'plugins.bextract_plugin'),
+	#Plugin('bextract', 'plugins.bextract_plugin'),
 	Plugin('centroid', 'plugins.centroid_plugin')
 ]
 
