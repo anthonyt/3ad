@@ -1,10 +1,9 @@
 from marsyas import *
-from numpy import array
-
-mng = MarSystemManager()
-net = mng.create("Series", "net")
+from numpy import array, mean
 
 def createVector(filename):
+	mng = MarSystemManager()
+	net = mng.create("Series", "net")
 
 	# Create the centroid network
 	net.addMarSystem(mng.create("SoundFileSource", "src"))
@@ -18,8 +17,7 @@ def createVector(filename):
 	# Update the filename control for the centroid network
 	net.updControl("SoundFileSource/src/mrs_string/filename", MarControlPtr.from_string(filename))
 
-	count = 0
-	result = array(1)
+	vectors = []
 	# Loop through the audio file until it reaches the end
 	while (net.getControl("SoundFileSource/src/mrs_bool/notEmpty").to_bool()):
 
@@ -28,12 +26,9 @@ def createVector(filename):
 
 		# Obtain centroid values for this frame
 		result = net.getControl("mrs_realvec/processedData").to_realvec()
-		print result
+		vectors.append(result[0])
 
-	result.normMaxMin()
-	result = array(result) * 100
+	average = mean(array(vectors)) * 100
 
-	print(result)
-
-	return result.tolist()
+	return [average]
 
