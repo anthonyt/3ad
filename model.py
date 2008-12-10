@@ -5,6 +5,15 @@ from sqlalchemy.orm import relation
 from sqlalchemy.orm import sessionmaker
 from numpy import mean, array, dot, sqrt
 
+# FIXME: this should be defined elsewhere
+def euclidean_distance(a, b):
+	"""
+	takes two numpy arrays, a, b, both of length n
+	returns the magnitude of the distance between them (float)
+	"""
+	c = a - b
+	sum_of_squares = dot(c,c)
+	return sqrt(sum_of_squares)
 
 class Plugin(object):
 	def __init__(self, name, modulename):
@@ -53,6 +62,9 @@ class AudioFile(object):
 			return vector
 		else:
 			raise AttributeError
+
+	def distanceFromTag(self, tag):
+		return euclidean_distance(array(self.vector), array(tag.vector))
 
 
 class Tag(object):

@@ -4,14 +4,6 @@ from numpy import array, concatenate, divide, mean
 # instantiate our database handle
 db = Database()
 
-def euclidean_distance(a, b):
-	"""
-	takes two numpy arrays, a, b, both of length n
-	returns the magnitude of the distance between them (float)
-	"""
-	c = a - b
-	sum_of_squares = dot(c,c)
-	return sqrt(sum_of_squares)
 
 def regenerate_all_tag_locations():
 	# Update the vector for every tag, based on the new output
@@ -53,9 +45,8 @@ def generate_tags(tolerance=None):
 		for tag in file.tags:
 			print "SEED DATA: ", file, tag
 		for tag in db.session.query(Tag):
-			if tolerance is not None:
-				if euclidean_distance(tag.vector, file.vector) <= tolerance:
-					print "GENERATED: ", file, tag
+			if file.distanceFromTag(tag) <= tolerance:
+				print "GENERATED: ", file, tag
 
 if __name__ == "__main__":
 	regenerate_all_plugins()
