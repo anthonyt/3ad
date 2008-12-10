@@ -40,6 +40,14 @@ def regenerate_plugin(plugin_name):
 	regenerate_all_tag_locations();
 
 def generate_tags(tolerance=None):
+	if tolerance is None:
+		tolerance  = sum([p.findMaxDistanceFromAverage() for p in db.session.query(Plugin)])
+		tolerance -= sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
+	else:
+		tolerance += sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
+
+	print "Tolerance:", tolerance
+
 	for file in db.session.query(AudioFile):
 		print ""
 		for tag in file.tags:

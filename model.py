@@ -32,6 +32,18 @@ class Plugin(object):
 	def __repr__(self):
 		return "<Plugin('%s','%s')>" % (self.name, self.modulename)
 
+	def findMaxDistanceFromAverage(self):
+		vecs = [o.vector for o in self.outputs]
+		avg = mean(vecs, axis=0)
+		distances = [euclidean_distance(v, avg) for v in vecs]
+		return max(distances)
+
+	def findMinDistanceFromAverage(self):
+		vecs = [array(o.vector) for o in self.outputs]
+		avg = mean(vecs, axis=0)
+		distances = [euclidean_distance(v, avg) for v in vecs]
+		return min(distances)
+
 	def createVector(self, audiofile):
 		self.__setupModule()
 		return PluginOutput(self.module.createVector(audiofile.filename), self, audiofile)
