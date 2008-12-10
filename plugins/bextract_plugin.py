@@ -2,6 +2,7 @@
 # George Tzanetakis, January, 16, 2007 
 
 import marsyas
+from numpy import array
 
 # Create top-level patch
 mng = marsyas.MarSystemManager()
@@ -44,14 +45,16 @@ def createVector(filename):
 	previouslyPlaying = ""
 	while get("SoundFileSource/src/mrs_bool/notEmpty").to_bool():
 		currentlyPlaying = get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
+		print "FIXME: This line never gets printed! Something's wrong :("
 		if (currentlyPlaying != previouslyPlaying):
 			print "Processing: " +  get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
 		fnet.tick()
 		previouslyPlaying = currentlyPlaying
 
-	result = fnet.getControl("mrs_realvec/processedData").to_natural()
+	result = fnet.getControl("mrs_realvec/processedData").to_realvec()
 	result.normMaxMin()
 
 	result = array(result) * 100
+	print result # always an array of zeroes. damn.
 
 	return result.tolist()
