@@ -6,16 +6,17 @@ from numpy import array
 
 # Create top-level patch
 mng = marsyas.MarSystemManager()
-fnet = mng.create("Series", "featureNetwork")
-
-# functional short cuts to speed up typing 
-create = mng.create
-add = fnet.addMarSystem 
-link = fnet.linkControl
-upd = fnet.updControl
-get  = fnet.getControl
 
 def createVector(filename):
+
+	fnet = mng.create("Series", "featureNetwork")
+
+	# functional short cuts to speed up typing 
+	create = mng.create
+	add = fnet.addMarSystem 
+	link = fnet.linkControl
+	upd = fnet.updControl
+	get  = fnet.getControl
 
 	# Add the MarSystems 
 	add(create("SoundFileSource", "src"))
@@ -36,7 +37,7 @@ def createVector(filename):
 	upd("TimbreFeatures/featExtractor/mrs_string/disableLPCChild", marsyas.MarControlPtr.from_string("all"))
 	upd("TimbreFeatures/featExtractor/mrs_string/disableSPChild", marsyas.MarControlPtr.from_string("all"))
 	upd("TimbreFeatures/featExtractor/mrs_string/enableSPChild", marsyas.MarControlPtr.from_string("MFCC/mfcc"))
-	upd("mrs_string/filename", marsyas.MarControlPtr.from_string("bextract_single.mf"))
+	upd("mrs_string/filename", marsyas.MarControlPtr.from_string(filename))
 	upd("WekaSink/wsink/mrs_string/labelNames", 
 				  get("SoundFileSource/src/mrs_string/labelNames"))
 	upd("WekaSink/wsink/mrs_string/filename", marsyas.MarControlPtr.from_string("bextract_python.arff"))
@@ -45,11 +46,10 @@ def createVector(filename):
 	previouslyPlaying = ""
 	while get("SoundFileSource/src/mrs_bool/notEmpty").to_bool():
 		currentlyPlaying = get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
-		print "FIXME: This line never gets printed! Something's wrong :("
 		if (currentlyPlaying != previouslyPlaying):
 			print "Processing: " +  get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
 		fnet.tick()
-		previouslyPlaying = currentlyPlaying
+		previouslyPlaying = currentlyPlaying		
 
 	result = fnet.getControl("mrs_realvec/processedData").to_realvec()
 	result.normMaxMin()
