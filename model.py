@@ -76,10 +76,7 @@ class Tag(object):
 		return "<Tag('%s')>" % (self.name)
 
 	def updateVector(self):
-		vectors = []
-		for file in self.files:
-			vectors.append(file.vector)
-		self.vector = mean(array(vectors), axis=0)
+		self.vector = mean([f.vector for f in self.files], axis=0).tolist()
 		return self.vector
 
 class Database(object):
