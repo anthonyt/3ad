@@ -27,8 +27,8 @@ def createVector(filename):
 		net.tick()
 
 		# Obtain centroid values for this frame
-	 	result = net.getControl("mrs_realvec/processedData").to_realvec()
-		
+		result = net.getControl("mrs_realvec/processedData").to_realvec()
+		print result
 
 	result.normMaxMin()
 	result = array(result) * 100
@@ -36,3 +36,4 @@ def createVector(filename):
 	print(result)
 
 	return result.tolist()
+

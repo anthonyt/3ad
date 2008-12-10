@@ -1,5 +1,6 @@
 # bextract implemented using the swig python Marsyas bindings
-# George Tzanetakis, January, 16, 2007 
+# Modified (December 2008) by Matt Pierce and Anthony Theocharis,
+# from code by George Tzanetakis (January, 16, 2007)
 
 import marsyas
 from numpy import array
@@ -11,14 +12,14 @@ def createVector(filename):
 
 	fnet = mng.create("Series", "featureNetwork")
 
-	# functional short cuts to speed up typing 
+	# functional short cuts to speed up typing
 	create = mng.create
-	add = fnet.addMarSystem 
+	add = fnet.addMarSystem
 	link = fnet.linkControl
 	upd = fnet.updControl
 	get  = fnet.getControl
 
-	# Add the MarSystems 
+	# Add the MarSystems
 	add(create("SoundFileSource", "src"))
 	add(create("TimbreFeatures", "featExtractor"))
 	add(create("TextureStats", "tStats"))
@@ -32,24 +33,23 @@ def createVector(filename):
 	link("Annotator/annotator/mrs_natural/label", "SoundFileSource/src/mrs_natural/currentLabel")
 	link("SoundFileSource/src/mrs_natural/nLabels", "WekaSink/wsink/mrs_natural/nLabels")
 
-	# update controls to setup things 
+	# update controls to setup things
 	upd("TimbreFeatures/featExtractor/mrs_string/disableTDChild", marsyas.MarControlPtr.from_string("all"))
 	upd("TimbreFeatures/featExtractor/mrs_string/disableLPCChild", marsyas.MarControlPtr.from_string("all"))
 	upd("TimbreFeatures/featExtractor/mrs_string/disableSPChild", marsyas.MarControlPtr.from_string("all"))
 	upd("TimbreFeatures/featExtractor/mrs_string/enableSPChild", marsyas.MarControlPtr.from_string("MFCC/mfcc"))
 	upd("mrs_string/filename", marsyas.MarControlPtr.from_string(filename))
-	upd("WekaSink/wsink/mrs_string/labelNames", 
-				  get("SoundFileSource/src/mrs_string/labelNames"))
+	upd("WekaSink/wsink/mrs_string/labelNames", get("SoundFileSource/src/mrs_string/labelNames"))
 	upd("WekaSink/wsink/mrs_string/filename", marsyas.MarControlPtr.from_string("bextract_python.arff"))
 
-	# do the processing extracting MFCC features and writing to weka file 
+	# do the processing extracting MFCC features and writing to weka file
 	previouslyPlaying = ""
 	while get("SoundFileSource/src/mrs_bool/notEmpty").to_bool():
 		currentlyPlaying = get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
 		if (currentlyPlaying != previouslyPlaying):
 			print "Processing: " +  get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
 		fnet.tick()
-		previouslyPlaying = currentlyPlaying		
+		previouslyPlaying = currentlyPlaying
 
 	result = fnet.getControl("mrs_realvec/processedData").to_realvec()
 	result.normMaxMin()
@@ -58,3 +58,4 @@ def createVector(filename):
 	print result # always an array of zeroes. damn.
 
 	return result.tolist()
+
