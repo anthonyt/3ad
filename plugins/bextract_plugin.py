@@ -12,42 +12,35 @@ def createVector(filename):
 
 	fnet = mng.create("Series", "featureNetwork")
 
-	# functional short cuts to speed up typing
-	create = mng.create
-	add = fnet.addMarSystem
-	link = fnet.linkControl
-	upd = fnet.updControl
-	get  = fnet.getControl
-
 	# Add the MarSystems
-	add(create("SoundFileSource", "src"))
-	add(create("TimbreFeatures", "featExtractor"))
-	add(create("TextureStats", "tStats"))
-	add(create("Annotator", "annotator"))
-	add(create("WekaSink", "wsink"))
+	fnet.addMarSystem(mng.create("SoundFileSource", "src"))
+	fnet.addMarSystem(mng.create("TimbreFeatures", "featExtractor"))
+	fnet.addMarSystem(mng.create("TextureStats", "tStats"))
+	fnet.addMarSystem(mng.create("Annotator", "annotator"))
+	fnet.addMarSystem(mng.create("WekaSink", "wsink"))
 
 	# link the controls to coordinate things
-	link("mrs_string/filename", "SoundFileSource/src/mrs_string/filename")
-	link("mrs_bool/notEmpty", "SoundFileSource/src/mrs_bool/notEmpty")
-	link("WekaSink/wsink/mrs_string/currentlyPlaying","SoundFileSource/src/mrs_string/currentlyPlaying")
-	link("Annotator/annotator/mrs_natural/label", "SoundFileSource/src/mrs_natural/currentLabel")
-	link("SoundFileSource/src/mrs_natural/nLabels", "WekaSink/wsink/mrs_natural/nLabels")
+	fnet.linkControl("mrs_string/filename", "SoundFileSource/src/mrs_string/filename")
+	fnet.linkControl("mrs_bool/notEmpty", "SoundFileSource/src/mrs_bool/notEmpty")
+	fnet.linkControl("WekaSink/wsink/mrs_string/currentlyPlaying","SoundFileSource/src/mrs_string/currentlyPlaying")
+	fnet.linkControl("Annotator/annotator/mrs_natural/label", "SoundFileSource/src/mrs_natural/currentLabel")
+	fnet.linkControl("SoundFileSource/src/mrs_natural/nLabels", "WekaSink/wsink/mrs_natural/nLabels")
 
 	# update controls to setup things
-	upd("TimbreFeatures/featExtractor/mrs_string/disableTDChild", marsyas.MarControlPtr.from_string("all"))
-	upd("TimbreFeatures/featExtractor/mrs_string/disableLPCChild", marsyas.MarControlPtr.from_string("all"))
-	upd("TimbreFeatures/featExtractor/mrs_string/disableSPChild", marsyas.MarControlPtr.from_string("all"))
-	upd("TimbreFeatures/featExtractor/mrs_string/enableSPChild", marsyas.MarControlPtr.from_string("MFCC/mfcc"))
-	upd("mrs_string/filename", marsyas.MarControlPtr.from_string(filename))
-	upd("WekaSink/wsink/mrs_string/labelNames", get("SoundFileSource/src/mrs_string/labelNames"))
-	upd("WekaSink/wsink/mrs_string/filename", marsyas.MarControlPtr.from_string("bextract_python.arff"))
+	fnet.updControl("TimbreFeatures/featExtractor/mrs_string/disableTDChild", marsyas.MarControlPtr.from_string("all"))
+	fnet.updControl("TimbreFeatures/featExtractor/mrs_string/disableLPCChild", marsyas.MarControlPtr.from_string("all"))
+	fnet.updControl("TimbreFeatures/featExtractor/mrs_string/disableSPChild", marsyas.MarControlPtr.from_string("all"))
+	fnet.updControl("TimbreFeatures/featExtractor/mrs_string/enableSPChild", marsyas.MarControlPtr.from_string("MFCC/mfcc"))
+	fnet.updControl("mrs_string/filename", marsyas.MarControlPtr.from_string(filename))
+	fnet.updControl("WekaSink/wsink/mrs_string/labelNames", fnet.getControl("SoundFileSource/src/mrs_string/labelNames"))
+	fnet.updControl("WekaSink/wsink/mrs_string/filename", marsyas.MarControlPtr.from_string("bextract_python.arff"))
 
 	# do the processing extracting MFCC features and writing to weka file
 	previouslyPlaying = ""
-	while get("SoundFileSource/src/mrs_bool/notEmpty").to_bool():
-		currentlyPlaying = get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
+	while fnet.getControl("SoundFileSource/src/mrs_bool/notEmpty").to_bool():
+		currentlyPlaying = fnet.getControl("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
 		if (currentlyPlaying != previouslyPlaying):
-			print "Processing: " +  get("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
+			print "Processing: " +  fnet.getControl("SoundFileSource/src/mrs_string/currentlyPlaying").to_string()
 		fnet.tick()
 		previouslyPlaying = currentlyPlaying
 
