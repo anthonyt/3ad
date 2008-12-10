@@ -32,7 +32,8 @@ for line in input:
 
 # Set up the default plugins
 plugins = [
-	Plugin('charlotte', 'plugins.charlotte')
+	Plugin('charlotte', 'plugins.charlotte'),
+	Plugin('bextract', 'plugins.bextract_plugin')
 ]
 
 # Save all plugins that aren't already in the database.

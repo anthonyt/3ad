@@ -57,6 +57,7 @@ def generate_tags(tolerance=None):
 				if euclidean_distance(tag.vector, file.vector) <= tolerance:
 					print "GENERATED: ", file, tag
 
-regenerate_all_plugins()
-regenerate_all_tag_locations()
-generate_tags(10)
+if __name__ == "__main__":
+	regenerate_all_plugins()
+	regenerate_all_tag_locations()
+	generate_tags(80)
