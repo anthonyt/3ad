@@ -114,7 +114,7 @@ class controller(object):
 
 
 	@staticmethod
-	def generate_tags_for_file(filename, tagstring):
+	def generate_tags_for_file(filename, tagstring=""):
 		# Check to see if this filename already exists in the database
 		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
 			# If not already existing in the database, run the add_file script to create a new object
