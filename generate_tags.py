@@ -14,8 +14,8 @@ def main(argv):
 
 	# Check to see if this filename already exists in the database
 	if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
-			# If not already existing in the database, run the add_file script to create a new object
-			add_file.main(argv)
+		# If not already existing in the database, run the add_file script to create a new object
+		add_file.main(argv)
 	
 	test.regenerate_all_plugins(fname)
 
