@@ -47,6 +47,8 @@ class controller(object):
 				print "Creating vector for", file, plugin
 				output = plugin.createVector(file)
 
+		controller.regenerate_all_tag_locations();
+
 	@staticmethod
 	def regenerate_plugin(plugin_name):
 		plugin = db.session.query(Plugin).filter_by(name=plugin_name).all()[0]
@@ -59,15 +61,15 @@ class controller(object):
 			print "Creating vector for", file, plugin
 			output = plugin.createVector(file);
 
-		regenerate_all_tag_locations();
+		controller.regenerate_all_tag_locations();
 
 	@staticmethod
 	def generate_tags(filename=None, tolerance=None):
-		if tolerance is None:
-			tolerance  = sum([p.findMaxDistanceFromAverage() for p in db.session.query(Plugin)])
-			tolerance -= sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
-		else:
-			tolerance += sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
+#		if tolerance is None:
+#			tolerance  = sum([p.findMaxDistanceFromAverage() for p in db.session.query(Plugin)])
+#			tolerance -= sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
+#		else:
+#			tolerance += sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
 
 		print "Tolerance:", tolerance
 
@@ -119,8 +121,8 @@ class controller(object):
 		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
 			# If not already existing in the database, run the add_file script to create a new object
 			controller.add_file(filename, tagstring)
+			# Run all active plugins over the newly generated file and obtain tag generation results
+			controller.regenerate_all_plugins(filename)
+			controller.regenerate_all_tag_locations()
 
-		# Run all active plugins over the newly generated file and obtain tag generation results
-		controller.regenerate_all_plugins(filename)
-		controller.regenerate_all_tag_locations()
 		controller.generate_tags(filename, tolerance)
