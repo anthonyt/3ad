@@ -1,10 +1,11 @@
-import marsyas
 import sys
 import getopt
 import os
-import init_database
+from model import *
 
-def main(argv):
+db = Database()
+
+def add(argv):
 
 	# File name should be first argument
 	filename = argv[0]
@@ -23,20 +24,40 @@ def main(argv):
 			if opt in ("-t", "--tag"):
 				outstring = outstring + arg + " "
 
-	# Append the new file name (and tag if specified) to the files list
+	# Update files.txt and the database with the new audio file
+	update_audiolist(outstring)
+	update_database(outstring)
+
+
+def update_audiolist(file_string):
 	input = open("files.txt", "r+w")
 	input.readlines()
-	input.writelines(outstring + "\n")
-
-	# Close the file to finalize the change
+	input.writelines(file_string + "\n")
 	input.close()
 
-	# Reinitialize the database with the new audio file
-	init_database.init()
+
+def update_database(file_string):
+	line = file_string.split(',')
+	fname = line[0]
+	if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
+		# If this filename is not already existing in the database...
+		f = AudioFile(fname)
+		tags = filter(None, line[1].strip().split(' '))
+		for tag in tags:
+			tags = db.session.query(Tag).filter_by(name=tag)
+			if tags.count() < 1:
+				# If this tag is not already existing in the database...
+				t = Tag(tag)
+				db.saveObject(t)
+			else:
+				t = tags.all()[0]
+			f.tags.append(t)
+		db.saveObject(f)
+
 
 # Usage error message
 def usage():
 	print("Usage: python add_file.py [filename] (optional)[-t or --tags <tag string>]")
 
 if __name__ == "__main__":
-	main(sys.argv[1:])
+	add(sys.argv[1:])
