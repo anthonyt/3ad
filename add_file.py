@@ -9,7 +9,7 @@ def add(argv):
 
 	# File name should be first argument
 	filename = argv[0]
-	if not os.path.exists(fname):
+	if not os.path.exists(filename):
 		print("ERROR: No such file exists")
 		exit(2)
 
@@ -28,7 +28,6 @@ def add(argv):
 				outstring = outstring + arg + " "
 
 	# Update the database and files.txt with the new audio file and its corresponding filepath
-	outstring = "audio/" + outstring
 	update_database(outstring)
 	update_audiolist(outstring)
 
@@ -46,7 +45,6 @@ def update_database(file_string):
 	print(fname)
 	if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
 		# If this filename is not already existing in the database...
-		print "in here"
 		f = AudioFile(fname)
 		tags = filter(None, line[1].strip().split(' '))
 		for tag in tags:

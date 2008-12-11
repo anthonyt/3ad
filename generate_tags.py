@@ -23,6 +23,7 @@ def main(argv):
 
 	# Run all active plugins over the newly generated file and obtain tag generation results
 	test.regenerate_all_plugins(fname)
+	test.regenerate_all_tag_locations()
 	test.generate_tags(fname, 80)
 
 

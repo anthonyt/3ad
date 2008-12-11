@@ -88,6 +88,8 @@ class Tag(object):
 		return "<Tag('%s')>" % (self.name)
 
 	def updateVector(self):
+		for f in self.files:
+			print(f.vector)
 		self.vector = mean([f.vector for f in self.files], axis=0).tolist()
 		return self.vector
 
