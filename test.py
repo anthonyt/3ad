@@ -25,8 +25,7 @@ def regenerate_all_plugins(filename = None):
 				print "Creating vector for", file, plugin
 				output = plugin.createVector(file);
 		else:
-			print "in here"
-			file = db.session.query(AudioFile).filter_by(filename=filename).first()
+			file = db.session.query(AudioFile).filter_by(filename=filename)
 			print "Creating vector for", file, plugin
 			output = plugin.createVector(file)
 
