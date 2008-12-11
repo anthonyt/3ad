@@ -9,9 +9,12 @@ def add(argv):
 
 	# File name should be first argument
 	filename = argv[0]
+	if not os.path.exists(fname):
+		print("ERROR: No such file exists")
+		exit(2)
 
 	# String to be written to file (will include filename and all tags)
-	outstring = "audio/" + filename + ", "
+	outstring = filename + ", "
 
 	# Look for the tag inclusion flag
 	if(len(argv) > 1):
@@ -24,9 +27,10 @@ def add(argv):
 			if opt in ("-t", "--tag"):
 				outstring = outstring + arg + " "
 
-	# Update files.txt and the database with the new audio file
-	update_audiolist(outstring)
+	# Update the database and files.txt with the new audio file and its corresponding filepath
+	outstring = "audio/" + outstring
 	update_database(outstring)
+	update_audiolist(outstring)
 
 
 def update_audiolist(file_string):
@@ -39,8 +43,10 @@ def update_audiolist(file_string):
 def update_database(file_string):
 	line = file_string.split(',')
 	fname = line[0]
+	print(fname)
 	if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
 		# If this filename is not already existing in the database...
+		print "in here"
 		f = AudioFile(fname)
 		tags = filter(None, line[1].strip().split(' '))
 		for tag in tags:

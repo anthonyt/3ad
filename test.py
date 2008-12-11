@@ -11,7 +11,7 @@ def regenerate_all_tag_locations():
 		print "Creating vector for", tag
 		tag.updateVector()
 
-def regenerate_all_plugins(filename = None):
+def regenerate_all_plugins(filename=None):
 	# Run every plugin over every file, computing a whole bunch of Output Vectors.
 	plugins = db.session.query(Plugin).order_by(Plugin.name)
 
@@ -48,7 +48,7 @@ def regenerate_plugin(plugin_name):
 
 	regenerate_all_tag_locations();
 
-def generate_tags(tolerance=None):
+def generate_tags(filename=None, tolerance=None):
 	if tolerance is None:
 		tolerance  = sum([p.findMaxDistanceFromAverage() for p in db.session.query(Plugin)])
 		tolerance -= sum([p.findMinDistanceFromAverage() for p in db.session.query(Plugin)])
@@ -57,7 +57,15 @@ def generate_tags(tolerance=None):
 
 	print "Tolerance:", tolerance
 
-	for file in db.session.query(AudioFile):
+	files = db.session.query(AudioFile)
+	if filename is not None:
+		files = files.filter_by(filename = filename)
+
+	if files.count() == 0:
+		print "No files found with the name", filename
+		return
+
+	for file in files:
 		print ""
 		for tag in file.tags:
 			print "SEED DATA: ", file, tag
