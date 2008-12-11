@@ -41,7 +41,7 @@ def main(argv):
 		controller.generate_tags_for_file(filename, tolerance, tags)
 
 def usage():
-	print("Usage: python generate_tags.py (optional)[filename] (optional)[-t or --tags <user-generated tag string>]")
+	print("Usage: python generate_tags.py [-f or --file=filename] [-t or --tags=tag] [-r or --tolerance=tolerance]")
 
 
 if __name__ == "__main__":
