@@ -22,10 +22,10 @@ def regenerate_all_plugins(filename=None):
 	if files.count() == 0:
 		print "No files found with the name", filename
 		return
-
+		
 	for plugin in plugins:
 		# delete all of the old output for this plugin.
-		if filename is None:
+		if filename is None or files.count() > 1:
 			for old_output in db.session.query(PluginOutput).filter_by(plugin=plugin):
 				db.session.delete(old_output)
 
