@@ -94,17 +94,22 @@ class controller(object):
 		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
 			# If this filename is not already existing in the database...
 			f = AudioFile(filename)
-			tags = filter(None, tagstring.strip().split(' '))
-			for tag in tags:
-				tags = db.session.query(Tag).filter_by(name=tag)
-				if tags.count() < 1:
-					# If this tag is not already existing in the database...
-					t = Tag(tag)
-					db.saveObject(t)
-				else:
-					t = tags.all()[0]
-				f.tags.append(t)
+			controller.tag_file(f, tagstring)
 			db.saveObject(f)
+	
+	@staticmethod
+	def tag_file(file, tagstring):
+		tags = filter(None, tagstring.strip().split(' '))
+		for tag in tags:
+			tags = db.session.query(Tag).filter_by(name=tag)
+			if tags.count() < 1:
+				# If this tag is not already existing in the database...
+				t = Tag(tag)
+				db.saveObject(t)
+			else:
+				t = tags.all()[0]
+			if t not in file.tags:
+				file.tags.append(t)
 
 	@staticmethod
 	def add_plugin(name, modulename):
@@ -118,11 +123,16 @@ class controller(object):
 	@staticmethod
 	def generate_tags_for_file(filename, tagstring=""):
 		# Check to see if this filename already exists in the database
-		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
+		query = db.session.query(AudioFile).filter_by(filename=filename)
+		if query.count() < 1:
 			# If not already existing in the database, run the add_file script to create a new object
-			controller.add_file(filename, tagstring)
+			file = controller.add_file(filename, tagstring)
 			# Run all active plugins over the newly generated file and obtain tag generation results
 			controller.regenerate_all_plugins(filename)
-			controller.regenerate_all_tag_locations()
+		else:
+			file = query.all()[0]
 
+		controller.tag_file(file, tagstring)
+		controller.regenerate_all_tag_locations()
 		controller.generate_tags(filename, tolerance)
+

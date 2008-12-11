@@ -21,10 +21,11 @@ def main(argv):
 		try:
 			opts, args = getopt.getopt(argv[2:], "t:", ["tags="])
 			tags = opts[0][1]
+			controller.generate_tags_for_file(filename, tags)
+			print tags
 		except getopt.GetoptError:
 			usage()
 			return -1
-		controller.generate_tags_for_file(filename, tags)
 	else:
 		controller.generate_tags_for_file(filename)
 
