@@ -10,7 +10,6 @@ def regenerate_all_tag_locations():
 	for tag in db.session.query(Tag):
 		print "Creating vector for", tag
 		tag.updateVector()
-		print(tag.vector)
 
 def regenerate_all_plugins(filename=None):
 	# Run every plugin over every file, computing a whole bunch of Output Vectors.
@@ -26,8 +25,9 @@ def regenerate_all_plugins(filename=None):
 
 	for plugin in plugins:
 		# delete all of the old output for this plugin.
-		for old_output in db.session.query(PluginOutput).filter_by(plugin=plugin):
-			db.session.delete(old_output)
+		if filename is None:
+			for old_output in db.session.query(PluginOutput).filter_by(plugin=plugin):
+				db.session.delete(old_output)
 
 		# iterate over each file, generating new output.
 		for file in files:
