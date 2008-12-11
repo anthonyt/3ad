@@ -10,7 +10,7 @@ db = Database()
 
 def main(argv):
 	
-	fname = argv[0] + ","
+	fname = argv[0]
 
 	# Check to see if this filename already exists in the database
 	if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
