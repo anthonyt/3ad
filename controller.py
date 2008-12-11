@@ -52,7 +52,7 @@ class controller(object):
 			db.saveObject(f)
 
 
-	def generate_tags_for_file(filename, opts):
+	def generate_tags_for_file(filename, opts=None):
 		# Check to see if this filename already exists in the database
 		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
 			# If not already existing in the database, run the add_file script to create a new object
