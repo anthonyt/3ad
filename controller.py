@@ -114,14 +114,13 @@ class controller(object):
 
 
 	@staticmethod
-	def generate_tags_for_file(filename, opts=None):
+	def generate_tags_for_file(filename, tagstring):
 		# Check to see if this filename already exists in the database
 		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
 			# If not already existing in the database, run the add_file script to create a new object
-			controller.add_file(filename, opts)
+			controller.add_file(filename, tagstring)
 
 		# Run all active plugins over the newly generated file and obtain tag generation results
 		controller.regenerate_all_plugins(filename)
 		controller.regenerate_all_tag_locations()
-		print filename
 		controller.generate_tags(filename, tolerance)

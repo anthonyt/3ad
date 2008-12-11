@@ -7,8 +7,6 @@ def main(argv):
 
 	# If no file was passed on the command line, calculate vectors and generate tags for all files currently in the database
 	if(len(argv) == 1):
-		controller.regenerate_all_plugins()
-		controller.regenerate_all_tag_locations()
 		controller.generate_tags(None, 80)
 		return
 
