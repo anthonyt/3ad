@@ -11,7 +11,7 @@ def regenerate_all_tag_locations():
 		print "Creating vector for", tag
 		tag.updateVector()
 
-def regenerate_all_plugins():
+def regenerate_all_plugins(filename = None):
 	# Run every plugin over every file, computing a whole bunch of Output Vectors.
 	plugins = db.session.query(Plugin).order_by(Plugin.name)
 	for plugin in plugins:
@@ -19,10 +19,16 @@ def regenerate_all_plugins():
 		for old_output in db.session.query(PluginOutput).filter_by(plugin=plugin):
 			db.session.delete(old_output)
 
-		# iterate over each file, generating new output.
-		for file in db.session.query(AudioFile):
+		if(filename == None):
+			# iterate over each file, generating new output.
+			for file in db.session.query(AudioFile):
+				print "Creating vector for", file, plugin
+				output = plugin.createVector(file);
+		else:
+			print "in here"
+			file = db.session.query(AudioFile).filter_by(filename=filename).first()
 			print "Creating vector for", file, plugin
-			output = plugin.createVector(file);
+			output = plugin.createVector(file)
 
 	regenerate_all_tag_locations();
 
