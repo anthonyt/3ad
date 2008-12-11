@@ -7,7 +7,6 @@ import test
 
 # Global framework variables
 db = Database()
-tolerance = 80
 
 class controller(object):
 
@@ -121,7 +120,7 @@ class controller(object):
 
 
 	@staticmethod
-	def generate_tags_for_file(filename, tagstring=""):
+	def generate_tags_for_file(filename, tolerance, tagstring=""):
 		# Check to see if this filename already exists in the database
 		query = db.session.query(AudioFile).filter_by(filename=filename)
 		if query.count() < 1:

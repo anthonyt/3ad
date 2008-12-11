@@ -5,29 +5,40 @@ from controller import *
 
 def main(argv):
 
-	# If no file was passed on the command line, calculate vectors and generate tags for all files currently in the database
-	if(len(argv) == 1):
-		controller.generate_tags(None, 10)
-		return
+	try:
+		# Parse the command line options
+		opts, args = getopt.getopt(argv[1:], "f:t:r:", ["file=", "tags=", "tolerance="])
 
-	# Get the file name from the command line args and check if it exists
-	filename = argv[1]
-	if not os.path.exists(filename):
-		print("ERROR: No such file exists")
+		# Filter unique tags
+		tags = " ".join(filter(None, [opt[1] for opt in opts if opt[0] in ("-t", "--tags")]))
+
+		# use the first tolerance provided, or default to 10
+		tolerances = [int(opt[1]) for opt in opts if opt[0] in ("-r", "--tolerance")]
+		if len(tolerances) > 0:
+			tolerance = tolerances[0]
+		else:
+			tolerance = 10
+
+		# use the first file provided, or None
+		files = [opt[1] for opt in opts if opt[0] in ("-f", "--file")]
+		if len(files) > 0:
+			filename = files[0]
+		else:
+			filename = None
+	except getopt.GetoptError:
+		usage()
 		return -1
 
-	# Look for the tag inclusion flag
-	if(len(argv) > 2):
-		try:
-			opts, args = getopt.getopt(argv[2:], "t:", ["tags="])
-			tags = opts[0][1]
-			controller.generate_tags_for_file(filename, tags)
-			print tags
-		except getopt.GetoptError:
-			usage()
-			return -1
+	# If no file was passed on the command line, calculate vectors and generate tags for all files currently in the database
+	if filename is None:
+		controller.generate_tags(None, tolerance)
+		return
 	else:
-		controller.generate_tags_for_file(filename)
+		# Get the file name from the command line args and check if it exists
+		if not os.path.exists(filename):
+			print("ERROR: '%s' No such file exists" % filename)
+			return -1
+		controller.generate_tags_for_file(filename, tolerance, tags)
 
 def usage():
 	print("Usage: python generate_tags.py (optional)[filename] (optional)[-t or --tags <user-generated tag string>]")
