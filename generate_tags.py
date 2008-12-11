@@ -22,10 +22,11 @@ def main(argv):
 	if(len(argv) > 2):
 		try:
 			opts, args = getopt.getopt(argv[2:], "t:", ["tags="])
+			tags = opts[0][1]
 		except getopt.GetoptError:
 			usage()
 			return -1
-		controller.generate_tags_for_file(filename, opts)
+		controller.generate_tags_for_file(filename, tags)
 	else:
 		controller.generate_tags_for_file(filename)
 

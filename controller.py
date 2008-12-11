@@ -88,44 +88,11 @@ class controller(object):
 					print "GENERATED: ", file, tag
 
 	@staticmethod
-	def add_file(filename, opts=None):
-
-		# If the file already exists, return, there is no need to re-add
-		if db.session.query(AudioFile).filter_by(filename=filename).count() > 0:
-			for old_output in db.session.query(PluginOutput).filter_by(filename=filename):
-				print "in here"
-				db.session.delete(old_output)
-			return
-
-		# String to be written to file or db (will include filename and all tags)
-		outstring = filename + ", "
-
-		# Add tags to string
-		if opts is not None:
-			for opt, arg in opts:
-				if opt in ("-t", "--tag"):
-					outstring = outstring + arg + " "
-
-		# Update the database and files.txt with the new audio file and its corresponding filepath
-		controller.add_file_to_db(outstring)
-		controller.add_filepath_to_audiolist(outstring)
-
-	@staticmethod
-	def add_filepath_to_audiolist(file_string):
-		input = open("files.txt", "r+w")
-		input.readlines()
-		input.writelines(file_string + "\n")
-		input.close()
-
-	@staticmethod
-	def add_file_to_db(file_string):
-		line = file_string.split(',')
-		fname = line[0]
-		print(fname)
-		if db.session.query(AudioFile).filter_by(filename=fname).count() < 1:
+	def add_file(filename, tagstring=""):
+		if db.session.query(AudioFile).filter_by(filename=filename).count() < 1:
 			# If this filename is not already existing in the database...
-			f = AudioFile(fname)
-			tags = filter(None, line[1].strip().split(' '))
+			f = AudioFile(filename)
+			tags = filter(None, tagstring.strip().split(' '))
 			for tag in tags:
 				tags = db.session.query(Tag).filter_by(name=tag)
 				if tags.count() < 1:
@@ -136,6 +103,15 @@ class controller(object):
 					t = tags.all()[0]
 				f.tags.append(t)
 			db.saveObject(f)
+
+	@staticmethod
+	def add_plugin(name, modulename):
+		query = db.session.query(Plugin).filter_by(modulename=modulename)
+		if query.count() < 1:
+			plugin = Plugin(name, modulename)
+			db.saveObject(plugin)
+		return query.one()
+
 
 	@staticmethod
 	def generate_tags_for_file(filename, opts=None):

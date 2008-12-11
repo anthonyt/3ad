@@ -1,5 +1,6 @@
 import sys
 from model import *
+from controller import *
 
 def main(argv=sys.argv):
 	name = argv[1]
@@ -7,8 +8,7 @@ def main(argv=sys.argv):
 	db = Database()
 
 	try:
-		plugin = Plugin(name, modulename)
-		db.saveObject(plugin)
+		plugin = controller.add_plugin(name, modulename)
 		print "Created Plugin: ", plugin
 		return 0
 	except ImportError:

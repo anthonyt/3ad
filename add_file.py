@@ -17,10 +17,11 @@ def main(argv):
 	if(len(argv) > 1):
 		try:
 			opts, args = getopt.getopt(argv[1:], "t:", ["tags="])
+			tags = opts[0][1]
 		except getopt.GetoptError:
 			usage()
 			sys.exit(2)
-		controller.add_file(filename, opts)
+		controller.add_file(filename, tags)
 	else:
 		controller.add_file(filename)
 
@@ -32,6 +33,6 @@ def usage():
 if __name__ == "__main__":
 	if(len(sys.argv) < 2):
 		usage()
-		return -1
+		sys.exit(-1)
 		
 	main(sys.argv[1:])
