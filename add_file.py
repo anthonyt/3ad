@@ -2,6 +2,7 @@ import marsyas
 import sys
 import getopt
 import os
+import init_database
 
 def main(argv):
 
@@ -27,8 +28,13 @@ def main(argv):
 	input.readlines()
 	input.writelines(outstring + "\n")
 
+	# Close the file to finalize the change
 	input.close()
 
+	# Reinitialize the database with the new audio file
+	init_database.init()
+
+# Usage error message
 def usage():
 	print("Usage: python add_file.py [filename] (optional)[-t or --tags <tag string>]")
 
