@@ -1,3 +1,5 @@
 This is the repository for the 3AD framework.
 
 The 3AD framework is an audio analysis and description framework. It aims to provide users with a way to tag audio files with meaningful (searchable) text descriptors, both manually added and automatically generated. The system attempts to find correlations between user generated descriptors and the output of audio analysis algorithms. Using these correlations, the system creates automatically generated descriptors for the files.
+
+Visit the current project website at http://webhome.csc.uvic.ca/~anthonyt/3ad.html
