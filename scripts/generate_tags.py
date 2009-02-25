@@ -1,13 +1,23 @@
-import os
-import getopt
-import sys
-from ad3.controller import controller
 
-def main(argv):
+def usage():
+	print("Usage: python generate_tags.py [-f or --file=filename] [-t or --tags=tag] [-r or --tolerance=tolerance]")
+
+
+if __name__ == "__main__":
+	import sys
+	import os
+
+	# ensure the main ad3 module is on the path
+	parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+	if parent_dir not in sys.path:
+		sys.path.append(parent_dir)
+
+	import getopt
+	from ad3.controller import controller
 
 	try:
 		# Parse the command line options
-		opts, args = getopt.getopt(argv[1:], "f:t:r:", ["file=", "tags=", "tolerance="])
+		opts, args = getopt.getopt(sys.argv[1:], "f:t:r:", ["file=", "tags=", "tolerance="])
 
 		# Filter unique tags
 		tags = " ".join(filter(None, [opt[1] for opt in opts if opt[0] in ("-t", "--tags")]))
@@ -40,13 +50,3 @@ def main(argv):
 			return -1
 		controller.generate_tags_for_file(filename, tolerance, tags)
 
-def usage():
-	print("Usage: python generate_tags.py [-f or --file=filename] [-t or --tags=tag] [-r or --tolerance=tolerance]")
-
-
-if __name__ == "__main__":
-	#if(len(sys.argv) < 2):
-		#usage()
-		#exit(-1)
-
-	main(sys.argv)
