@@ -37,16 +37,16 @@ if __name__ == "__main__":
             filename = None
     except getopt.GetoptError:
         usage()
-        return -1
+        sys.exit(1)
 
     # If no file was passed on the command line, calculate vectors and generate tags for all files currently in the database
     if filename is None:
         controller.generate_tags(None, tolerance)
-        return
+        sys.exit(0)
     else:
         # Get the file name from the command line args and check if it exists
         if not os.path.exists(filename):
             print("ERROR: '%s' No such file exists" % filename)
-            return -1
+            sys.exit(1)
         controller.generate_tags_for_file(filename, tolerance, tags)
 
