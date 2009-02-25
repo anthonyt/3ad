@@ -101,10 +101,13 @@ class Database(object):
 		return self.metadata.drop_all(self.engine)
 
 	def saveObject(self, object):
-		return self.session.save(object)
+		return self.session.add(object)
 
 	def query(self, *entities, **kwargs):
 		return self.session.query(*entities, **kwargs)
+
+	def commit(self):
+		return self.session.commit()
 
 	def __create_metadata(self):
 		self.metadata = MetaData()
@@ -198,6 +201,6 @@ class Database(object):
 			self.__create_metadata();
 			self.__create_mappings();
 
-			Session = sessionmaker(bind=self.engine, autoflush=True, transactional=True)
+			Session = sessionmaker(bind=self.engine, autoflush=True)
 			self.session = Session()
 

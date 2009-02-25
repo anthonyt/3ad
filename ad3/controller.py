@@ -15,6 +15,7 @@ class controller(object):
 		for tag in db.query(Tag):
 			print "Creating vector for", tag
 			tag.updateVector()
+		db.commit()
 
 	@staticmethod
 	def regenerate_all_plugins(filename=None):
@@ -45,7 +46,8 @@ class controller(object):
 				print "Creating vector for", file, plugin
 				output = plugin.createVector(file)
 
-		controller.regenerate_all_tag_locations();
+		db.commit()
+		controller.regenerate_all_tag_locations()
 
 	@staticmethod
 	def regenerate_plugin(plugin_name):
@@ -57,9 +59,11 @@ class controller(object):
 		# iterate over each file, generating new output.
 		for file in db.query(AudioFile):
 			print "Creating vector for", file, plugin
-			output = plugin.createVector(file);
+			output = plugin.createVector(file)
 
-		controller.regenerate_all_tag_locations();
+		db.commit()
+
+		controller.regenerate_all_tag_locations()
 
 	@staticmethod
 	def generate_tags(filename=None, tolerance=None):
@@ -109,12 +113,15 @@ class controller(object):
 			if t not in file.tags:
 				file.tags.append(t)
 
+		db.commit()
+
 	@staticmethod
 	def add_plugin(name, modulename):
 		query = db.query(Plugin).filter_by(modulename=modulename)
 		if query.count() < 1:
 			plugin = Plugin(name, modulename)
 			db.saveObject(plugin)
+			db.commit()
 		return query.one()
 
 
