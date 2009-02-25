@@ -1,11 +1,9 @@
 import sys
-from model import *
-from controller import *
+from ad3.controller import controller
 
 def main(argv=sys.argv):
 	name = argv[1]
 	modulename = argv[2]
-	db = Database()
 
 	try:
 		plugin = controller.add_plugin(name, modulename)

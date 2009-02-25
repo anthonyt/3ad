@@ -1,7 +1,7 @@
 import os
 import getopt
 import sys
-from controller import *
+from ad3.controller import controller
 
 def main(argv):
 

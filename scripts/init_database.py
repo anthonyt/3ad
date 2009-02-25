@@ -1,8 +1,6 @@
-from model import *
-from controller import *
+from ad3.model import AudioFile, Plugin
+from ad3.controller import db, controller
 import os
-
-db = Database();
 
 def init():
 
@@ -23,18 +21,18 @@ def init():
 	plugins = [
 		('charlotte', 'plugins.charlotte'),
 		#('bextract', 'plugins.bextract_plugin'),
-		('centroid', 'plugins.centroid_plugin')
+		#('centroid', 'plugins.centroid_plugin')
 	]
 
 	# Save all plugins that aren't already in the database.
 	for plugin in plugins:
 		controller.add_plugin(plugin[0], plugin[1])
-	
+
 
 	# Finally, print out the data that we just entered.
-	for file in db.session.query(AudioFile):
+	for file in db.query(AudioFile):
 		print file, file.tags
-	for plugin in db.session.query(Plugin):
+	for plugin in db.query(Plugin):
 		print plugin
 
 if __name__ == "__main__":

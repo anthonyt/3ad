@@ -103,6 +103,9 @@ class Database(object):
 	def saveObject(self, object):
 		return self.session.save(object)
 
+	def query(self, *entities, **kwargs):
+		return self.session.query(*entities, **kwargs)
+
 	def __create_metadata(self):
 		self.metadata = MetaData()
 
