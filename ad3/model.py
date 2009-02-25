@@ -100,8 +100,11 @@ class Database(object):
 	def dropTables(self):
 		return self.metadata.drop_all(self.engine)
 
-	def saveObject(self, object):
+	def add(self, object):
 		return self.session.add(object)
+
+	def delete(self, object):
+		return self.session.delete(object)
 
 	def query(self, *entities, **kwargs):
 		return self.session.query(*entities, **kwargs)

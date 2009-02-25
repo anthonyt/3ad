@@ -29,7 +29,7 @@ class controller(object):
 			files = files.filter_by(filename = filename)
 			audiofile = db.query(AudioFile).filter_by(filename=filename).one()
 			for old_output in db.query(PluginOutput).filter_by(file=audiofile):
-				db.session.delete(old_output)
+				db.delete(old_output)
 
 		if files.count() == 0:
 			print "No files found with the name", filename
@@ -39,7 +39,7 @@ class controller(object):
 			# delete all of the old output for this plugin.
 			if filename is None:
 				for old_output in db.query(PluginOutput).filter_by(plugin=plugin):
-					db.session.delete(old_output)
+					db.delete(old_output)
 
 			# iterate over each file, generating new output.
 			for file in files:
@@ -54,7 +54,7 @@ class controller(object):
 		plugin = db.query(Plugin).filter_by(name=plugin_name).all()[0]
 		# delete all of the old output for this plugin.
 		for old_output in db.query(PluginOutput).filter_by(plugin=plugin):
-			db.session.delete(old_output)
+			db.delete(old_output)
 
 		# iterate over each file, generating new output.
 		for file in db.query(AudioFile):
@@ -97,7 +97,7 @@ class controller(object):
 			# If this filename is not already existing in the database...
 			f = AudioFile(filename)
 			controller.tag_file(f, tagstring)
-			db.saveObject(f)
+			db.add(f)
 
 	@staticmethod
 	def tag_file(file, tagstring):
@@ -107,7 +107,7 @@ class controller(object):
 			if tags.count() < 1:
 				# If this tag is not already existing in the database...
 				t = Tag(tag)
-				db.saveObject(t)
+				db.add(t)
 			else:
 				t = tags.all()[0]
 			if t not in file.tags:
@@ -120,7 +120,7 @@ class controller(object):
 		query = db.query(Plugin).filter_by(modulename=modulename)
 		if query.count() < 1:
 			plugin = Plugin(name, modulename)
-			db.saveObject(plugin)
+			db.add(plugin)
 			db.commit()
 		return query.one()
 
