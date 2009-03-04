@@ -7,7 +7,7 @@ if __name__ == "__main__":
     if parent_dir not in sys.path:
         sys.path.append(parent_dir)
 
-    from ad3.model import AudioFile, Plugin
+    from ad3.models.sql import AudioFile, Plugin
     from ad3.controller import db, controller
 
     # drop the old tables
@@ -84,9 +84,9 @@ if __name__ == "__main__":
 
     # Set up the default plugins
     plugins = [
-        ('charlotte', 'ad3.plugins.charlotte'),
-        #('bextract', 'ad3.plugins.bextract_plugin'),
-        #('centroid', 'ad3.plugins.centroid_plugin')
+        ('charlotte', 'ad3.analysis_plugins.charlotte'),
+        #('bextract', 'ad3.analysis_plugins.bextract_plugin'),
+        #('centroid', 'ad3.analysis_plugins.centroid_plugin')
     ]
 
     # Save all plugins that aren't already in the database.

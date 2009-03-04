@@ -2,7 +2,7 @@ import sys
 import getopt
 import os
 from numpy import array, concatenate, divide, mean
-from ad3.model import Database, AudioFile, Plugin, PluginOutput, Tag
+from ad3.models.sql import Database, AudioFile, Plugin, PluginOutput, Tag
 
 # Global framework variables
 db = Database()
