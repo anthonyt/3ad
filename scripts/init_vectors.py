@@ -15,6 +15,6 @@ if __name__ == "__main__":
     euclid = Euclidean(model)
     controller = Controller(model, euclid)
 
-#    controller.create_vectors()
+    controller.create_vectors()
     controller.update_tag_vectors()
 

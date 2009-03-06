@@ -35,6 +35,7 @@ class Controller(object):
 
         # update the file vectors
         for file in files:
+            print "Updating vector for", file
             file.vector = self.mine.calculate_file_vector(file)
 
         print "Updated %d plugins for %d files" % (len(plugins), len(files))
