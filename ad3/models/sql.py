@@ -8,31 +8,6 @@ from numpy import mean, array, dot, sqrt
 
 import ad3.models.abstract
 
-class AudioFile(ad3.models.abstract.AudioFile):
-    def save(self):
-        if self.id is None:
-            db.add(self)
-
-class Plugin(ad3.models.abstract.Plugin):
-    def save(self):
-        if self.id is None:
-            db.add(self)
-
-    def createVector(self, audiofile):
-        return PluginOutput(self.module.createVector(audiofile.file_name), self, audiofile)
-
-class Tag(ad3.models.abstract.Tag):
-    def save(self):
-        if self.id is None:
-            db.add(self)
-
-class PluginOutput(ad3.models.abstract.PluginOutput):
-    def save(self):
-        if self.id is None:
-            db.add(self)
-
-
-
 class Database(object):
     __shared_state = {'session': None}
 
@@ -149,6 +124,26 @@ class Database(object):
 
             Session = sessionmaker(bind=self.engine, autoflush=True)
             self.session = Session()
+
+
+class Saveable(object):
+    def save(self):
+        if self.id is None:
+            db.add(self)
+
+class Plugin(Saveable, ad3.models.abstract.Plugin):
+    def createVector(self, audiofile):
+        return PluginOutput(self.module.createVector(audiofile.file_name), self, audiofile)
+
+class AudioFile(Saveable, ad3.models.abstract.AudioFile):
+    pass
+
+class Tag(Saveable, ad3.models.abstract.Tag):
+    pass
+
+class PluginOutput(Saveable, ad3.models.abstract.PluginOutput):
+    pass
+
 
 # Global framework variables
 db = Database()
