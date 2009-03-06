@@ -7,14 +7,18 @@ if __name__ == "__main__":
     if parent_dir not in sys.path:
         sys.path.append(parent_dir)
 
+    import ad3
+    import ad3.models
+    import ad3.models.sql
     from ad3.models.sql import AudioFile, Plugin
-    from ad3.controller import db, controller
+    from ad3.learning.euclid import Euclidean
+    from ad3.controller import Controller
 
-    # drop the old tables
-    db.dropTables();
+    model = ad3.models.sql
+    euclid = Euclidean(model)
+    controller = Controller(model, euclid)
 
-    # create the fresh tables
-    db.createTables();
+    controller.initialize_storage()
 
     # Create an audio file object for each file in the listings file
     # (Also dynamically create tags to represent each tag in the file)
@@ -80,7 +84,7 @@ if __name__ == "__main__":
         (u"audio/_23 Clouds.wav", u"debussy"),
         (u"audio/_24 Clouds.wav", u"debussy")]
     for (fname, tagstring) in files:
-        controller.add_file(fname, tagstring)
+        controller.add_file(u"/Users/anthony/Documents/school/csc466/3ad/"+fname, tagstring)
 
     # Set up the default plugins
     plugins = [
@@ -95,8 +99,8 @@ if __name__ == "__main__":
 
 
     # Finally, print out the data that we just entered.
-    for file in db.query(AudioFile):
+    for file in model.get_audio_files():
         print file, file.tags
-    for plugin in db.query(Plugin):
+    for plugin in model.get_plugins():
         print plugin
 

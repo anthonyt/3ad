@@ -13,7 +13,13 @@ if __name__ == "__main__":
         sys.path.append(parent_dir)
 
     import getopt
-    from ad3.controller import controller
+    import ad3.models.sql
+    from ad3.learning.euclid import Euclidean
+    from ad3.controller import Controller
+
+    model = ad3.models.sql
+    euclid = Euclidean(model)
+    controller = Controller(model, euclid)
 
     try:
         # Parse the command line options
@@ -31,22 +37,22 @@ if __name__ == "__main__":
 
         # use the first file provided, or None
         files = [opt[1] for opt in opts if opt[0] in ("-f", "--file")]
+        filename = None
+
         if len(files) > 0:
             filename = files[0]
-        else:
-            filename = None
+
     except getopt.GetoptError:
         usage()
         sys.exit(1)
 
     # If no file was passed on the command line, calculate vectors and generate tags for all files currently in the database
-    if filename is None:
-        controller.generate_tags(None, tolerance)
-        sys.exit(0)
-    else:
+    if filename is not None:
         # Get the file name from the command line args and check if it exists
         if not os.path.exists(filename):
             print("ERROR: '%s' No such file exists" % filename)
             sys.exit(1)
-        controller.generate_tags_for_file(filename, tolerance, tags)
+
+    controller.guess_tags(filename)
+    sys.exit(0)
 
