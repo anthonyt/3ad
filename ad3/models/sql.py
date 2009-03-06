@@ -149,12 +149,24 @@ class PluginOutput(Saveable, ad3.models.abstract.PluginOutput):
 db = Database()
 
 def get_tags(name = None):
+    """ Return a list of Tag objects. By default returns all tags.
+
+    @param name: return only tags with tag.name matching provided name
+    @type  name: unicode
+    """
     query = db.query(Tag)
     if name is not None:
         query = query.filter_by(name = name)
     return query.all()
 
 def get_tag(name):
+    """ Returns a single Tag object with the provided name.
+
+    If no existing tag is found, a new one is created and returned.
+
+    @param name: the name of the tag object to return
+    @type  name: unicode
+    """
     query = db.query(Tag).filter_by(name = name)
     try:
         tag = query.one()
@@ -165,12 +177,24 @@ def get_tag(name):
     return tag
 
 def initialize_storage():
+    """ Initializes an empty storage environment.
+
+    For a database, this might mean to (re)create all tables.
+    """
     # drop the old tables
     db.dropTables()
     # create the fresh tables
     db.createTables()
 
 def get_plugins(name = None, module_name = None):
+    """ Return a list of Plugin objects. By default returns all plugins.
+
+    @param name: if provided, returns only plugins with a matching name
+    @type  name: unicode
+
+    @param module_name: if provided, returns only plugins with a matching module_name
+    @type  module_name: unicode
+    """
     query = db.query(Plugin).order_by(Plugin.name)
     if name is not None:
         query.filter_by(name = name)
@@ -181,6 +205,17 @@ def get_plugins(name = None, module_name = None):
     return query.all()
 
 def get_audio_files(file_name=None, tag_names=None, include_guessed=False):
+    """ Return a list of AudioFile objects. By default returns all audio files.
+
+    @param file_name: if provided, returns only files with a matching file name
+    @type  file_name: unicode
+
+    @param tag_names: if provided, returns only files with at least one of the provided tags
+    @type  tag_names: list of unicode objects
+
+    @param include_guessed: if provided, when looking for matching tags, includes generated_tags in the search
+    @type  include_guessed: bool
+    """
     query = db.query(AudioFile)
     if file_name is not None:
         query = query.filter_by(file_name=file_name)
@@ -190,18 +225,44 @@ def get_audio_files(file_name=None, tag_names=None, include_guessed=False):
                      .filter(Tag.name.in_(tag_names))\
                      .group_by(AudioFile.id)\
                      .having(func.count(AudioFile.id) == len(tag_names))
+        if include_guessed:
+            # TODO: Include support for the include_guessed parameter!!
+            # this is pretty integral to the functioning of the app.
+            pass
 
     return query.all()
 
 def get_audio_file(file_name):
-    query = db.query(AudioFile).filter_by(file_name=file_name)
-    return query.one()
+    """ Return an AudioFile object. If no existing object is found, returns None.
+
+    @param file_name: the file name of the audio file
+    @type  file_name: unicode
+    """
+    try:
+        query = db.query(AudioFile).filter_by(file_name=file_name)
+        return query.one()
+    except NoResultFound:
+        return None
 
 def save(obj):
+    """ Save an object to permanent storage.
+
+    @param obj: the object to save
+    @type  obj: Saveable
+    """
     obj.save()
     db.commit()
 
 def update_vector(plugin, audio_file):
+    """ Create or Replace the current PluginOutput object for the
+    provided plugin/audio file pair. Saves the PluginObject to storage.
+
+    @param plugin: the plugin object to use
+    @type  plugin: Plugin
+
+    @param audio_file: the audio file to run the plugin on
+    @type  audio_file: AudioFile
+    """
     for old_output in db.query(PluginOutput).filter_by(plugin=plugin,file=audio_file):
         # there should really only be one output with the same file/plugin combo
         db.delete(old_output)
