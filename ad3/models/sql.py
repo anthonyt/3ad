@@ -197,10 +197,10 @@ def get_plugins(name = None, module_name = None):
     """
     query = db.query(Plugin).order_by(Plugin.name)
     if name is not None:
-        query.filter_by(name = name)
+        query = query.filter_by(name = name)
 
     if module_name is not None:
-        query.filter_by(module_name = module_name)
+        query = query.filter_by(module_name = module_name)
 
     return query.all()
 
