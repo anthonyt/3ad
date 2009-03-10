@@ -132,7 +132,7 @@ class Saveable(object):
             db.add(self)
 
 class Plugin(Saveable, ad3.models.abstract.Plugin):
-    def createVector(self, audiofile):
+    def create_vector(self, audiofile):
         return PluginOutput(self.module.createVector(audiofile.file_name), self, audiofile)
 
 class AudioFile(Saveable, ad3.models.abstract.AudioFile):
@@ -266,7 +266,7 @@ def update_vector(plugin, audio_file):
     for old_output in db.query(PluginOutput).filter_by(plugin=plugin,file=audio_file):
         # there should really only be one output with the same file/plugin combo
         db.delete(old_output)
-    PO = plugin.createVector(audio_file)
+    PO = plugin.create_vector(audio_file)
     save(PO)
     return PO
 
