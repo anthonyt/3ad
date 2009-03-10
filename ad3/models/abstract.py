@@ -34,7 +34,7 @@ class Plugin(object):
     def __repr__(self):
         return "<Plugin('%s','%s')>" % (self.name, self.module_name)
 
-    def createVector(self, audiofile):
+    def create_vector(self, audiofile):
         return PluginOutput(self.module.createVector(audiofile.file_name), self, audiofile)
 
 
