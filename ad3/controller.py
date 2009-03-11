@@ -72,8 +72,13 @@ class Controller(object):
         else:
             file = file_name
 
-        for tag in tags:
-            tag = self.model.get_tag(tag)
+        for _tag in tags:
+            tag = self.model.get_tag(_tag)
+
+            if tag is None:
+                tag = Tag(_tag)
+                self.model.save(tag)
+
             if tag not in file.tags:
                 file.tags.append(tag)
             self.model.save(file)

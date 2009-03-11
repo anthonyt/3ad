@@ -105,9 +105,7 @@ def get_tags(name = None):
     pass
 
 def get_tag(name):
-    """ Returns a single Tag object with the provided name.
-
-    If no existing tag is found, a new one is created and returned.
+    """ Returns a single Tag object with the provided name, if one exists in the data store.
 
     @param name: the name of the tag object to return
     @type  name: unicode
