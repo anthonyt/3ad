@@ -1,12 +1,50 @@
 import ad3.models.abstract
 import simplejson
 from time import time
+from sets import Set
 
-class TupleAggregator(object):
+class KeyAggregator(object):
+    # Once initialized with a list of tuples to match against
     def __init__(self, net_handler, tuple_list):
         self.net_handler = net_handler
         self.tuple_list = tuple_list
-        self.tuple_count = len(tuple_list)
+        self.key_lists = []
+
+    def go(self, callback):
+        def got_tuples(tuples):
+            if tuples is None:
+                # not sure if this is necessary
+                # depends what get_tuples() returns (below)
+                keys = []
+            else:
+                keys = [t[1] for t in tuples]
+
+            self.key_lists.append(keys)
+
+            # if we have got all the values we asked for,
+            # find the common keys, and call the callback function
+            if len(self.key_lists) == len(self.tuple_list):
+                keys = Set(self.key_lists[0])
+
+                for ks in self.key_lists[1:]:
+                    keys = keys.intersection(ks)
+
+                callback(list(keys))
+
+        # for each search tuple, run our got_tuples function on the resulting tuple rows
+        for dTuple in self.tuple_list:
+            self.net_handler.dht_get_tuples(dTuple, got_tuples)
+
+
+class ObjectAggregator(object):
+    # Once initialized with a list of hash keys
+    # the ObjectAggregator can be instructed to create a
+    # list of objects represented by the data at those keys
+    # and asynchronously pass that list to a callback function
+
+    def __init__(self, net_handler, key_list):
+        self.net_handler = net_handler
+        self.key_list = key_list
         self.objects = []
 
     def go(self, callback):
@@ -17,17 +55,13 @@ class TupleAggregator(object):
 
             # if we have got all the values we asked for
             # call the callback function
-            if len(self.objects) == len (self.tuple_list):
+            if len(self.objects) == len(self.key_list):
                 callback(self.objects)
 
-        # for each tuple, try to fetch a cached version of the object
-        # otherwise run our got_value function on the value row
-        for t in self.tuple_list:
-            cached = self.net_handler.cache_get_obj(t[0])
-            if cached is not None:
-                self.objects.append(cached)
-            else:
-                self.net_handler.dht_get_value(t[0], got_value)
+        # for each key, run our got_value function on the value row
+        for key in self.key_list:
+            self.net_handler.dht_get_value(key, got_value)
+
 
 class NetworkHandler(object):
     def __init__(self, node)
@@ -35,50 +69,51 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        pass
+        h = simplejson.decode(row)
+
+        if h['type'] == "plugin":
+            o = Plugin(h['name'], h['module_name'], h['key'])
+
+        elif h['type'] == "plugin_output":
+            o = PluginOutput(h['vector'], h['plugin'], h['audio_file'], h['key'])
+
+        elif h['type'] == "tag":
+            o = Tag(h['name'], h['vector'], h['key'])
+
+        elif h['type'] == "audio_file":
+            o = AudioFile(h['file_name'], h['vector'], h['key'])
+
+        else:
+            o = None
+
+        return o
+
 
     def hash_function(self, plain_key):
         h = hashlib.sha1()
         h.update(plain_key)
         return h.digest()
 
-    def cache_get_obj(self, key):
-        """
-        if the object exists in our cache
-        and its lifetime has not expired
-        return it. else return None
-        """
-        if key in self._cache:
-            entry = self._cache[key]
-            if int(time()) < entry[0]:
-                return entry[1]
-
-        return None
-
-    def cache_store_obj(self, key, obj):
-        """
-        store the object in our cache
-        with an end of life timestamp
-        """
-        lifetime = int(time()) + 30
-        self._cache[key] = (lifetime, obj)
 
     def dht_get_value(self, key, callback):
         def success(result):
+            # return a useful value
             if type(result) == dict:
-                value = result[key]
+                return result[key]
             else:
-                value = None
-
-            callback(value)
+                return None
 
         def error(failure):
             print 'An error occurred:', failure.getErrorMessage()
             callback(None)
 
         df = self.node.iterativeFindValue(key)
+        # use the "success" function to filter our result before
+        # passing it to the callback
         df.addCallback(success)
+        df.addCallback(callback)
         df.addErrback(error)
+
 
     def dht_store_value(self, key, value):
         def success(result):
@@ -86,6 +121,7 @@ class NetworkHandler(object):
 
         df = self.node.iterativeStore(key, value)
         df.addCallback(success)
+
 
     def dht_get_tuples(self, dTuple, callback)
         def success(result):
@@ -109,11 +145,11 @@ class NetworkHandler(object):
         df = self.node.put(dTuple)
         df.addCallback(success)
 
-    def get_tags(self, name = None, callback = None):
-        """ Return a list of Tag objects. By default returns all tags.
 
-        @param name: return only tags with tag.name matching provided name
-        @type  name: unicode
+    def get_objects_matching_tuple(self, dTuple, callback):
+        """
+        Return a list of the appropriate objects for each tuple found
+        that matches the provided tuple
         """
         def got_tuples(result):
             if result is None:
@@ -121,73 +157,24 @@ class NetworkHandler(object):
             else:
                 # if we actually have tuples returned
                 # call our tuple agregator to find corresponding value rows
-                ta = TupleAggregator(self, result)
+                ta = ObjectAggregator(self, result)
                 ta.go(callback)
 
         # get a list of all tags in the DHT
-        self.dht_get_tuples( ("tag", None, name), got_tuples )
+        self.dht_get_tuples( dTuple, got_tuples )
 
-    def get_tag(self, name, callback = None):
-        """ Returns a single Tag object with the provided name.
-
-        If no existing tag is found, a new one is created and returned.
-
-        @param name: the name of the tag object to return
-        @type  name: unicode
+    def get_object_matching_tuple(self, dTuple, callback):
         """
-        pass
-
-    def initialize_storage(self, callback = None):
-        """ Initializes an empty storage environment.
-
-        For a database, this might mean to (re)create all tables.
+        Return a single object representing the first matched tuple
         """
-        pass
+        def pick_one(obj_list):
+            if len(obj_list) > 0:
+                callback(obj_list[0])
+            else:
+                callback(None)
 
-    def fetch_plugin_output(self, key, callback = None):
-        my_string = get_value(key)
-        my_hash = simplejson.decode(my_string)
-        return PluginOutput(my_hash['
+        self.get_objects_matching_tuple(dTuple, pick_one)
 
-    def fetch_plugin(self, key, callback = None):
-        my_string = get_value(key)
-        my_hash = simplejson.decode(my_string)
-        return Plugin(my_hash['name'], my_hash['module_name'], key)
-
-    def get_plugins(self, name = None, module_name = None, callback = None):
-        """ Return a list of Plugin objects. By default returns all plugins.
-
-        @param name: if provided, returns only plugins with a matching name
-        @type  name: unicode
-
-        @param module_name: if provided, returns only plugins with a matching module_name
-        @type  module_name: unicode
-        """
-        plugin_tuples = self.dht_get_tuple(("plugin", None, name, module_name))
-        plugin_objects = [fetch_plugin(t[1]) for t in plugin_tuples]
-        return plugin_objects
-
-    def get_audio_files(self, file_name=None, tag_names=None, include_guessed=False, callback = None):
-        """ Return a list of AudioFile objects. By default returns all audio files.
-
-        @param file_name: if provided, returns only files with a matching file name
-        @type  file_name: unicode
-
-        @param tag_names: if provided, returns only files with at least one of the provided tags
-        @type  tag_names: list of unicode objects
-
-        @param include_guessed: if provided, when looking for matching tags, includes generated_tags in the search
-        @type  include_guessed: bool
-        """
-        pass
-
-    def get_audio_file(self, file_name, callback = None):
-        """ Return an AudioFile object. If no existing object is found, returns None.
-
-        @param file_name: the file name of the audio file
-        @type  file_name: unicode
-        """
-        pass
 
     def save(self, obj, callback = None):
         """ Save an object to permanent storage.
@@ -197,18 +184,27 @@ class NetworkHandler(object):
         """
         pass
 
-    def update_vector(self, plugin, audio_file, callback = None):
-        """ Create or Replace the current PluginOutput object for the
-        provided plugin/audio file pair. Saves the PluginObject to storage.
 
-        @param plugin: the plugin object to use
-        @type  plugin: Plugin
-
-        @param audio_file: the audio file to run the plugin on
-        @type  audio_file: AudioFile
+    def cache_get_obj(self, key):
         """
-        pass
+        if the object exists in our cache
+        and its lifetime has not expired
+        return it. else return None
+        """
+        if key in self._cache:
+            entry = self._cache[key]
+            if int(time()) < entry[0]:
+                return entry[1]
 
+        return None
+
+    def cache_store_obj(self, key, obj):
+        """
+        store the object in our cache
+        with an end of life timestamp
+        """
+        lifetime = int(time()) + 30
+        self._cache[key] = (lifetime, obj)
 
 __network_handler = None
 
@@ -227,7 +223,6 @@ class Plugin(ad3.models.abstract.Plugin):
     Attributes:
         name
         module_name
-        outputs
         key
 
     Methods:
@@ -259,29 +254,6 @@ class Plugin(ad3.models.abstract.Plugin):
 
         store_value(self.key, my_string)
         put_tuple(my_tuple)
-"""
-to save a plugin:
-    key = hash_function("plugin_" + plugin_name + module_name)
-    tuple = ("plugin", key, plugin.name, plugin.module_name)
-    plugin_value = simplejson.encode({ 'name': plugin.name, 'module_name': plugin.module_name })
-
-    self.storeValue(key, plugin_value)
-    self.putTuple(self, dTuple)
-
-to fetch a single plugin given a key:
-    p = self.getValue(key)
-    p = simplejson.decode(p)
-    return Plugin(p['name'], p['module_name'], key)
-
-
-to fetch a list of all plugins:
-    l = self.readTuple(("plugin", key, None, None))
-    ps = [fetch_single_plugin(t[1]) for t in l]
-
-to fetch all PluginOutputs associated with a plugin:
-    l = self.readTuple(("plugin_output", None, plugin.key, None))
-    pos = [fetch_single_plugin_output(t[1]), for t in l]
-"""
 
 class AudioFile(ad3.models.abstract.AudioFile):
     """
@@ -290,9 +262,7 @@ class AudioFile(ad3.models.abstract.AudioFile):
     Attributes:
         name
         vector
-        tags
-        generated_tags
-        id
+        key
 
     Method:
         getKey
@@ -308,8 +278,8 @@ class Tag(ad3.models.abstract.Tag):
 
     Attributes:
         name
-        files
         vector
+        key
     """
 
     def __init__(self, name):
@@ -323,36 +293,38 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
 
     Attributes:
         vector
-        plugin
-        file
+        plugin_key
+        file_key
+        key
     """
 
     def __init__(self, vector, plugin, audiofile):
         self.vector = vector
-        self.plugin = plugin
-        self.file = audiofile
+        self.plugin_key = plugin
+        self.file_key = audiofile
 
     def __repr__(self):
         return "<PluginOutput('%s')>" % (self.vector)
 
 
-def get_tags(name = None, callback = None):
+def get_tags(name = None, audio_file = None, callback = None):
     """ Return a list of Tag objects. By default returns all tags.
 
     @param name: return only tags with tag.name matching provided name
     @type  name: unicode
     """
-    return __network_handler.get_tags(name, callback)
+    if audio_file is None:
+        return __network_handler.get_objects_matching_tuple( ("tag", None, name), callback )
+    else:
+        return __network_handler.get_objects_matching_tuple( "
 
 def get_tag(name, callback = None):
-    """ Returns a single Tag object with the provided name.
-
-    If no existing tag is found, a new one is created and returned.
+    """ Returns a single Tag object with the provided name, if one exists in the data store.
 
     @param name: the name of the tag object to return
     @type  name: unicode
     """
-    return __network_handler.get_tags(name, callback)
+    return __network_handler.get_object_matching_tuple( ("tag", None, name), callback )
 
 def initialize_storage(callback = None):
     """ Initializes an empty storage environment.
