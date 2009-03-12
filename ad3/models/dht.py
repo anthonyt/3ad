@@ -75,7 +75,7 @@ class NetworkHandler(object):
             o = Plugin(h['name'], h['module_name'], h['key'])
 
         elif h['type'] == "plugin_output":
-            o = PluginOutput(h['vector'], h['plugin'], h['audio_file'], h['key'])
+            o = PluginOutput(h['vector'], h['key'])
 
         elif h['type'] == "tag":
             o = Tag(h['name'], h['vector'], h['key'])
@@ -146,26 +146,31 @@ class NetworkHandler(object):
         df.addCallback(success)
 
 
-    def get_objects_matching_tuple(self, dTuple, callback):
+    def get_objects_matching_tuples(self, tuple_list, callback):
         """
-        Return a list of the appropriate objects for each tuple found
-        that matches the provided tuple
+        Return a list of the appropriate objects for each object row
+        that matches all of the provided search tuples in the tuple_list
+
+        NB: providing an empty tuple list will result in no callback being fired
         """
-        def got_tuples(result):
-            if result is None:
+        def got_keys(keys):
+            if len(keys) == 0:
                 callback([])
             else:
-                # if we actually have tuples returned
+                # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
                 ta = ObjectAggregator(self, result)
                 ta.go(callback)
 
-        # get a list of all tags in the DHT
-        self.dht_get_tuples( dTuple, got_tuples )
+        ka = KeyAggregator(self, tuple_list)
+        ka.go(got_keys)
 
-    def get_object_matching_tuple(self, dTuple, callback):
+    def get_object_matching_tuples(self, tuple_list, callback):
         """
-        Return a single object representing the first matched tuple
+        Return a single object representing the first object row
+        that matches all of the provided search tuples in the tuple_list
+
+        NB: providing an empty tuple list will result in no callback being fired
         """
         def pick_one(obj_list):
             if len(obj_list) > 0:
@@ -173,7 +178,7 @@ class NetworkHandler(object):
             else:
                 callback(None)
 
-        self.get_objects_matching_tuple(dTuple, pick_one)
+        self.get_objects_matching_tuple(tuple_list, pick_one)
 
 
     def save(self, obj, callback = None):
@@ -307,16 +312,19 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         return "<PluginOutput('%s')>" % (self.vector)
 
 
-def get_tags(name = None, audio_file = None, callback = None):
+def get_tags(name = None, audio_file = None, guessed_file = None, callback = None):
     """ Return a list of Tag objects. By default returns all tags.
 
     @param name: return only tags with tag.name matching provided name
     @type  name: unicode
     """
-    if audio_file is None:
-        return __network_handler.get_objects_matching_tuple( ("tag", None, name), callback )
-    else:
-        return __network_handler.get_objects_matching_tuple( "
+    search_tuples = [ ("tag", None, name) ]
+    if audio_file is not None:
+        search_tuples.append( ("tag", None, "audio_file", audio_file.key) )
+    if guessed_file is not None:
+        search_tuples.append( ("tag", None, "guessed_file", guessed_file.key) )
+
+    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_tag(name, callback = None):
     """ Returns a single Tag object with the provided name, if one exists in the data store.
