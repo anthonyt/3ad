@@ -340,12 +340,22 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         if self.key is None:
             self.key = self.__get_key()
 
+            # store the object state
             my_hash = {'vector': self.vector, 'key': self.key}
             my_string = simplejson.encode(my_hash)
             __network_handler.dht_store_value(self.key, my_string)
 
+            # store a plugin_output row
             my_tuple = ("plugin_output", self.key, self.plugin_key, self.audio_key)
             __network_handler.dht_store_tuple(my_tuple)
+
+            # make a plugin row for cross referencing
+            plugin_tuple = ("plugin", self.plugin_key, "plugin_output", self.key)
+            __network_handler.dht_store_tuple(plugin_tuple)
+
+            # make an audio_file row for cross referencing
+            audio_tuple = ("audio_file", self.audio_key, "plugin_output", self.key)
+            __network_handler.dht_store_tuple(audio_tuple)
 
 
 def get_tags(callback, name = None, audio_file = None, guessed_file = None):
@@ -508,4 +518,22 @@ def initialize_storage(callback):
     """
     return __network_handler.initialize_storage(callback)
 
+def apply_tag_to_file(audio_file, tag):
+    tag_tuple = ("tag", tag.key, "audio_file", audio_file.key)
+    audio_tuple = ("audio_file", audio_file.key, "tag", tag.key)
+
+    # beware. i'm not sure if the framework will actually detect duplicate tuples
+    # you might have to ensure uniqueness before publishing the tuples.
+    __network_handler.dht_store_tuple(tag_tuple)
+    __network_handler.dht_store_tuple(audio_tuple)
+
+
+def guess_tag_for_file(audio_file, tag):
+    tag_tuple = ("tag", tag.key, "guessed_file", audio_file.key)
+    audio_tuple = ("audio_file", audio_file.key, "guessed_tag", tag.key)
+
+    # beware. i'm not sure if the framework will actually detect duplicate tuples
+    # you might have to ensure uniqueness before publishing the tuples.
+    __network_handler.dht_store_tuple(tag_tuple)
+    __network_handler.dht_store_tuple(audio_tuple)
 
