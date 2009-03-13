@@ -138,6 +138,7 @@ class NetworkHandler(object):
             print 'an error occurred:', failure.getErrorMessage()
             callback(None)
 
+        print "searching for tuples based on", dTuple
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -146,8 +147,13 @@ class NetworkHandler(object):
         def success(result):
             print 'stored tuple:', result
 
+        def error(failure):
+            print 'an error occurred:', failure.getErrorMessage()
+
+        print "Attempting to store tuple:", dTuple
         df = self.node.put(dTuple)
         df.addCallback(success)
+        df.addErrback(error)
 
 
     def get_objects_matching_tuples(self, tuple_list, callback):
@@ -166,6 +172,7 @@ class NetworkHandler(object):
                 ta = ObjectAggregator(self, keys)
                 ta.go(callback)
 
+        print "Making a KA object with tuple list:", tuple_list
         ka = KeyAggregator(self, tuple_list)
         ka.go(got_keys)
 
