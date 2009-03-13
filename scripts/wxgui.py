@@ -106,7 +106,7 @@ class MyMenu(wx.Frame):
         box = wx.BoxSizer(wx.VERTICAL)
         self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT)
         self.lc.InsertColumn(0, 'File Name')
-        self.lc.InsertColumn(1, 'Tags')
+        self.lc.InsertColumn(1, 'Vector')
         #self.lc.SetColumnWidth(0, 140)
         #self.lc.SetColumnWidth(1, 153)
         box.Add(self.lc, 1, wx.EXPAND | wx.ALL, 3)
@@ -137,6 +137,12 @@ class MyMenu(wx.Frame):
         self.statusbar.SetStatusText('Open Command')
         def got_files(files):
             print files
+            self.lc.DeleteAllItems()
+            for file in files:
+                num_items = self.lc.GetItemCount()
+                self.lc.InsertStringItem(num_items, file.file_name)
+                self.lc.SetStringItem(num_items, 1, str(file.vector))
+
             self.statusbar.SetStatusText('Got Files!')
 
         self.model.get_audio_files(got_files)
