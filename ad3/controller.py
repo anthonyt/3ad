@@ -138,25 +138,17 @@ class Controller(object):
 
 
     def tag_file(self, callback, file_name, tags=[]):
-        # accomodate tags lists that are in string format
-        if type(tags) is unicode:
-            tags = filter(lambda x: x != u'', tags.strip().split(u' '))
+        def got_file(file):
+            if len(tags) == 0:
+                callback(tags)
+            else:
+                def got_tags(tags):
+                    for t in tags:
+                        self.model.apply_tag_to_file(file, t)
+                    callback(tags)
 
-        if type(file_name) is unicode:
-            file = self.model.get_audio_file(file_name)
-        else:
-            file = file_name
-
-        for _tag in tags:
-            tag = self.model.get_tag(_tag)
-
-            if tag is None:
-                tag = Tag(_tag)
-                self.model.save(tag)
-
-            if tag not in file.tags:
-                file.tags.append(tag)
-            self.model.save(file)
+                ta = TagAggregator(self, self.model, tags)
+                ta.go(got_tags)
 
 
     def add_plugin(self, callback, name, module_name):
