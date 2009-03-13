@@ -134,7 +134,7 @@ class NetworkHandler(object):
             print 'an error occurred:', failure.getErrorMessage()
             callback(None)
 
-        df = self.node.readIfExists(template, 0)
+        df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
         df.addErrback(error)
 
@@ -178,7 +178,7 @@ class NetworkHandler(object):
             else:
                 callback(None)
 
-        self.get_objects_matching_tuple(tuple_list, pick_one)
+        self.get_objects_matching_tuples(tuple_list, pick_one)
 
 
     def cache_get_obj(self, key):
@@ -210,6 +210,8 @@ def set_network_handler(obj):
     should be an instance of the network handler class above
     will be used by all functions below
     """
+    print "setting network handler!", obj
+    global __network_handler
     __network_handler = obj
 
 class Plugin(ad3.models.abstract.Plugin):
