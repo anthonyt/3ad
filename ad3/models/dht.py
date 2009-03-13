@@ -64,7 +64,7 @@ class ObjectAggregator(object):
 
 
 class NetworkHandler(object):
-    def __init__(self, node)
+    def __init__(self, node):
         self.node = node
         self._cache = {}
 
@@ -123,7 +123,7 @@ class NetworkHandler(object):
         df.addCallback(success)
 
 
-    def dht_get_tuples(self, dTuple, callback)
+    def dht_get_tuples(self, dTuple, callback):
         def success(result):
             """
             @type result  tuple or None
@@ -348,7 +348,7 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
             __network_handler.dht_store_tuple(my_tuple)
 
 
-def get_tags(name = None, audio_file = None, guessed_file = None, callback):
+def get_tags(callback, name = None, audio_file = None, guessed_file = None):
     """ Return a list of Tag objects to the provided callback function
     By default returns all tags.
 
@@ -372,7 +372,7 @@ def get_tags(name = None, audio_file = None, guessed_file = None, callback):
 
     return __network_handler.get_objects_matching_tuples(search_tuples, callback)
 
-def get_tag(name, callback):
+def get_tag(callback, name):
     """ Returns a single Tag object to the provided callback function.
     If no such Tag exists in the data store, passes None to the callback function.
 
@@ -381,7 +381,7 @@ def get_tag(name, callback):
     """
     return __network_handler.get_object_matching_tuple( ("tag", None, name), callback )
 
-def get_plugins(name = None, module_name = None, plugin_output = None, callback):
+def get_plugins(callback, name = None, module_name = None, plugin_output = None):
     """ Return a list of Plugin objects to the provided callback function
     By default returns all plugins.
 
@@ -402,7 +402,7 @@ def get_plugins(name = None, module_name = None, plugin_output = None, callback)
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
     return __network_handler.get_objects_matching_tuples(search_tuples, callback)
 
-def get_plugin(name = None, module_name = None, plugin_output = None, callback):
+def get_plugin(callback, name = None, module_name = None, plugin_output = None):
     """ Return a single Plugin object to the provided callback function.
 
     @param name: if provided, returns only plugins with a matching name
@@ -422,7 +422,7 @@ def get_plugin(name = None, module_name = None, plugin_output = None, callback):
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
     return __network_handler.get_object_matching_tuples(search_tuples, callback)
 
-def get_audio_files(file_name=None, tag=None, guessed_tag=None, plugin_output=None, callback):
+def get_audio_files(callback, file_name=None, tag=None, guessed_tag=None, plugin_output=None):
     """ Return a list of AudioFile objects to the provided callback function.
     By default returns all audio files.
 
@@ -451,7 +451,7 @@ def get_audio_files(file_name=None, tag=None, guessed_tag=None, plugin_output=No
 
     return __network_handler.get_objects_matching_tuples(search_tuples, callback)
 
-def get_audio_file(file_name=None, tag=None, guessed_tag=None, plugin_output=None, callback):
+def get_audio_file(callback, file_name=None, tag=None, guessed_tag=None, plugin_output=None):
     """ Return a list of AudioFile objects to the provided callback function.
     By default returns all audio files.
 
@@ -481,7 +481,7 @@ def get_audio_file(file_name=None, tag=None, guessed_tag=None, plugin_output=Non
     return __network_handler.get_object_matching_tuples(search_tuples, callback)
 
 
-def save(obj, callback):
+def save(callback, obj):
     """ Save an object to permanent storage.
 
     @param obj: the object to save
@@ -489,7 +489,7 @@ def save(obj, callback):
     """
     return __network_handler.save(obj, callback)
 
-def update_vector(plugin, audio_file, callback):
+def update_vector(callback, plugin, audio_file):
     """ Create or Replace the current PluginOutput object for the
     provided plugin/audio file pair. Saves the PluginObject to storage.
 
@@ -501,7 +501,7 @@ def update_vector(plugin, audio_file, callback):
     """
     return __network_handler.update_vector(plugin, audio_file, callback)
 
-def initialize_storage(callback = None):
+def initialize_storage(callback):
     """ Initializes an empty storage environment.
 
     For a database, this might mean to (re)create all tables.
