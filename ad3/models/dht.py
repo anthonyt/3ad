@@ -238,27 +238,20 @@ class Plugin(ad3.models.abstract.Plugin):
     def __init__(self, name, module_name, key = None):
         ad3.models.abstract.Plugin.__init__(self, name, module_name)
         self.key = key
-        if key = None:
-            self.outputs = []
-        else:
-            self.outputs = 
-
-    def create_vector(self, audiofile):
-        return PluginOutput(self.module.createVector(audiofile.file_name), self, audiofile)
 
     def __get_key(self):
-        return hash_function("plugin_" + self.name + self.module_name)
+        return __network_handler.hash_function("plugin_" + self.name + self.module_name)
 
     def save(self):
         if self.key is None:
             self.key = self.__get_key()
 
-        my_hash = {'name': self.name, 'module_name': self.module_name}
-        my_tuple = ("plugin", self.key, self.name, self.module_name)
-        my_string = simplejson.encode(my_hash)
+            my_hash = {'name': self.name, 'module_name': self.module_name, 'key': self.key}
+            my_string = simplejson.encode(my_hash)
+            __network_handler.dht_store_value(self.key, my_string)
 
-        store_value(self.key, my_string)
-        put_tuple(my_tuple)
+            my_tuple = ("plugin", self.key, self.name, self.module_name)
+            __network_handler.dht_store_tuple(my_tuple)
 
 class AudioFile(ad3.models.abstract.AudioFile):
     """
@@ -273,9 +266,25 @@ class AudioFile(ad3.models.abstract.AudioFile):
         getKey
     """
 
-    def __init__(self, file_name, id = None):
+    def __init__(self, file_name, vector = None, key = None):
         ad3.models.abstract.AudioFile.__init__(self, file_name)
-        id = id
+
+        self.vector = vector
+        self.key = key
+
+    def __get_key(self):
+        return __network_handler.hash_function("audio_file_" + self.file_name)
+
+    def save(self):
+        if self.key is None:
+            self.key = self.__get_key()
+
+            my_hash = {'file_name': self.name, 'vector': self.vector, 'key': self.key}
+            my_string = simplejson.encode(my_hash)
+            __network_handler.dht_store_value(self.key, my_string)
+
+            my_tuple = ("audio_file", self.key, self.name)
+            __network_handler.dht_store_tuple(my_tuple)
 
 class Tag(ad3.models.abstract.Tag):
     """
@@ -287,9 +296,24 @@ class Tag(ad3.models.abstract.Tag):
         key
     """
 
-    def __init__(self, name):
+    def __init__(self, name, vector = None, key = None):
         self.name = name
-        self.vector = []
+        self.vector = vector
+        self.key = key
+
+    def __get_key(self):
+        return __network_handler.hash_function("tag_" + self.name)
+
+    def save(self):
+        if self.key is None:
+            self.key = self.__get_key()
+
+            my_hash = {'name': self.name, 'vector': self.vector, 'key': self.key}
+            my_string = simplejson.encode(my_hash)
+            __network_handler.dht_store_value(self.key, my_string)
+
+            my_tuple = ("tag", self.key, self.name)
+            __network_handler.dht_store_tuple(my_tuple)
 
 
 class PluginOutput(ad3.models.abstract.PluginOutput):
@@ -303,13 +327,25 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         key
     """
 
-    def __init__(self, vector, plugin, audiofile):
+    def __init__(self, vector, plugin_key = None, audio_key = None,  key = None):
         self.vector = vector
-        self.plugin_key = plugin
-        self.file_key = audiofile
+        self.plugin_key = plugin_key
+        self.audio_key = audio_key
+        self.key = key
 
-    def __repr__(self):
-        return "<PluginOutput('%s')>" % (self.vector)
+    def __get_key(self):
+        return __network_handler.hash_function("plugin_output_"+str(self.vector))
+
+    def save(self):
+        if self.key is None:
+            self.key = self.__get_key()
+
+            my_hash = {'vector': self.vector, 'key': self.key}
+            my_string = simplejson.encode(my_hash)
+            __network_handler.dht_store_value(self.key, my_string)
+
+            my_tuple = ("plugin_output", self.key, self.plugin_key, self.audio_key)
+            __network_handler.dht_store_tuple(my_tuple)
 
 
 def get_tags(name = None, audio_file = None, guessed_file = None, callback):
@@ -471,3 +507,5 @@ def initialize_storage(callback = None):
     For a database, this might mean to (re)create all tables.
     """
     return __network_handler.initialize_storage(callback)
+
+
