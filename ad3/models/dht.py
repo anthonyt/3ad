@@ -407,7 +407,8 @@ def get_tag(callback, name):
     @param name: the name of the tag object to return
     @type  name: unicode
     """
-    return _network_handler.get_object_matching_tuple( ("tag", None, name), callback )
+    search_tuples = [("tag", None, name)]
+    return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
 def get_plugin_outputs(callack, audio_file=None, plugin=None):
     if audio_file is not None:
