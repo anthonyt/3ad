@@ -45,13 +45,14 @@ class MyMenu(wx.Frame):
 
     def _setupGridAndMouse(self, panel):
         box = wx.BoxSizer(wx.VERTICAL)
-        sizer = wx.GridSizer(3, 3, 2, 2)
+        px_gap = 2
+        sizer = wx.GridSizer(3, 3, px_gap, px_gap)
 
         cursors = [ wx.CURSOR_ARROW, wx.CURSOR_HAND, wx.CURSOR_WATCH, wx.CURSOR_SPRAYCAN, wx.CURSOR_PENCIL,
                     wx.CURSOR_CROSS, wx.CURSOR_QUESTION_ARROW, wx.CURSOR_POINT_LEFT, wx.CURSOR_SIZING]
 
         for i in cursors:
-            subpanel = wx.Panel(self, -1, style=wx.SUNKEN_BORDER)
+            subpanel = wx.Panel(panel, -1, style=wx.SIMPLE_BORDER)
             subpanel.SetCursor(wx.StockCursor(i))
             sizer.Add(subpanel, flag=wx.EXPAND)
 
