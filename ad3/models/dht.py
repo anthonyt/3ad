@@ -1,5 +1,6 @@
 import ad3.models.abstract
 import simplejson
+import hashlib
 from time import time
 from sets import Set
 
@@ -60,6 +61,7 @@ class ObjectAggregator(object):
 
         # for each key, run our got_value function on the value row
         for key in self.key_list:
+            print "Searching for key..", key
             self.net_handler.dht_get_value(key, got_value)
 
 
@@ -69,19 +71,20 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        h = simplejson.decode(row)
+        print "OBJ FROM ROW", row
+        h = simplejson.loads(row)
 
         if h['type'] == "plugin":
-            o = Plugin(h['name'], h['module_name'], h['key'])
+            o = Plugin(h['name'], h['module_name'], h['key'].decode('hex'))
 
         elif h['type'] == "plugin_output":
-            o = PluginOutput(h['vector'], h['plugin_key'], h['audio_key'], h['key'])
+            o = PluginOutput(h['vector'], h['plugin_key'], h['audio_key'], h['key'].decode('hex'))
 
         elif h['type'] == "tag":
-            o = Tag(h['name'], h['vector'], h['key'])
+            o = Tag(h['name'], h['vector'], h['key'].decode('hex'))
 
         elif h['type'] == "audio_file":
-            o = AudioFile(h['file_name'], h['vector'], h['key'])
+            o = AudioFile(h['file_name'], h['vector'], h['key'].decode('hex'))
 
         else:
             o = None
@@ -90,6 +93,7 @@ class NetworkHandler(object):
 
 
     def hash_function(self, plain_key):
+        print "HASHING!"
         h = hashlib.sha1()
         h.update(plain_key)
         return h.digest()
@@ -136,7 +140,7 @@ class NetworkHandler(object):
 
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
-        df.addErrback(error)
+#        df.addErrback(error)
 
     def dht_store_tuple(self, dTuple):
         def success(result):
@@ -159,7 +163,7 @@ class NetworkHandler(object):
             else:
                 # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
-                ta = ObjectAggregator(self, result)
+                ta = ObjectAggregator(self, keys)
                 ta.go(callback)
 
         ka = KeyAggregator(self, tuple_list)
@@ -202,7 +206,7 @@ class NetworkHandler(object):
         lifetime = int(time()) + 30
         self._cache[key] = (lifetime, obj)
 
-__network_handler = None
+_network_handler = None
 
 def set_network_handler(obj):
     """
@@ -211,8 +215,8 @@ def set_network_handler(obj):
     will be used by all functions below
     """
     print "setting network handler!", obj
-    global __network_handler
-    __network_handler = obj
+    global _network_handler
+    _network_handler = obj
 
 class Plugin(ad3.models.abstract.Plugin):
     """
@@ -233,7 +237,8 @@ class Plugin(ad3.models.abstract.Plugin):
         self.key = key
 
     def __get_key(self):
-        return __network_handler.hash_function("plugin_" + self.name + self.module_name)
+        global _network_handler
+        return _network_handler.hash_function("plugin_" + self.name + self.module_name)
 
     def save(self):
         if self.key is None:
@@ -241,13 +246,13 @@ class Plugin(ad3.models.abstract.Plugin):
 
             my_hash = {'name': self.name,
                        'module_name': self.module_name,
-                       'key': self.key,
+                       'key': self.key.encode('hex'),
                        'type': 'plugin'}
-            my_string = simplejson.encode(my_hash)
-            __network_handler.dht_store_value(self.key, my_string)
+            my_string = simplejson.dumps(my_hash)
+            _network_handler.dht_store_value(self.key, my_string)
 
             my_tuple = ("plugin", self.key, self.name, self.module_name)
-            __network_handler.dht_store_tuple(my_tuple)
+            _network_handler.dht_store_tuple(my_tuple)
 
 class AudioFile(ad3.models.abstract.AudioFile):
     """
@@ -269,21 +274,27 @@ class AudioFile(ad3.models.abstract.AudioFile):
         self.key = key
 
     def __get_key(self):
-        return __network_handler.hash_function("audio_file_" + self.file_name)
+        print "getting key..."
+        r = _network_handler.hash_function("audio_file_" + self.file_name)
+        print "got key"
+        print r
+        return r
 
     def save(self):
+        print "I'm IN"
         if self.key is None:
             self.key = self.__get_key()
+            print "Setting key for the first time...", self.key
 
-            my_tuple = ("audio_file", self.key, self.name)
-            __network_handler.dht_store_tuple(my_tuple)
+            my_tuple = ("audio_file", self.key, self.file_name)
+            _network_handler.dht_store_tuple(my_tuple)
 
-        my_hash = {'file_name': self.name,
+        my_hash = {'file_name': self.file_name,
                    'vector': self.vector,
-                   'key': self.key,
+                   'key': self.key.encode('hex'),
                    'type': 'audio_file'}
-        my_string = simplejson.encode(my_hash)
-        __network_handler.dht_store_value(self.key, my_string)
+        my_string = simplejson.dumps(my_hash)
+        _network_handler.dht_store_value(self.key, my_string)
 
 class Tag(ad3.models.abstract.Tag):
     """
@@ -301,21 +312,21 @@ class Tag(ad3.models.abstract.Tag):
         self.key = key
 
     def __get_key(self):
-        return __network_handler.hash_function("tag_" + self.name)
+        return _network_handler.hash_function("tag_" + self.name)
 
     def save(self):
         if self.key is None:
             self.key = self.__get_key()
 
             my_tuple = ("tag", self.key, self.name)
-            __network_handler.dht_store_tuple(my_tuple)
+            _network_handler.dht_store_tuple(my_tuple)
 
         my_hash = {'name': self.name,
                    'vector': self.vector,
-                   'key': self.key,
+                   'key': self.key.encode('hex'),
                    'type': 'tag' }
-        my_string = simplejson.encode(my_hash)
-        __network_handler.dht_store_value(self.key, my_string)
+        my_string = simplejson.dumps(my_hash)
+        _network_handler.dht_store_value(self.key, my_string)
 
 
 class PluginOutput(ad3.models.abstract.PluginOutput):
@@ -336,7 +347,7 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         self.key = key
 
     def __get_key(self):
-        return __network_handler.hash_function("plugin_output_"+str(self.vector))
+        return _network_handler.hash_function("plugin_output_"+str(self.vector))
 
     def save(self):
         if self.key is None:
@@ -344,24 +355,24 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
 
             # store a plugin_output row
             my_tuple = ("plugin_output", self.key, self.plugin_key, self.audio_key)
-            __network_handler.dht_store_tuple(my_tuple)
+            _network_handler.dht_store_tuple(my_tuple)
 
             # make a plugin row for cross referencing
             plugin_tuple = ("plugin", self.plugin_key, "plugin_output", self.key)
-            __network_handler.dht_store_tuple(plugin_tuple)
+            _network_handler.dht_store_tuple(plugin_tuple)
 
             # make an audio_file row for cross referencing
             audio_tuple = ("audio_file", self.audio_key, "plugin_output", self.key)
-            __network_handler.dht_store_tuple(audio_tuple)
+            _network_handler.dht_store_tuple(audio_tuple)
 
         # store the object state
         my_hash = {'vector': self.vector,
-                   'key': self.key,
+                   'key': self.key.encode('hex'),
                    'plugin_key': self.plugin_key,
                    'audio_key': self.audio_key,
                    'type': 'plugin_output'}
-        my_string = simplejson.encode(my_hash)
-        __network_handler.dht_store_value(self.key, my_string)
+        my_string = simplejson.dumps(my_hash)
+        _network_handler.dht_store_value(self.key, my_string)
 
 
 
@@ -387,7 +398,7 @@ def get_tags(callback, name = None, audio_file = None, guessed_file = None):
     if guessed_file is not None:
         search_tuples.append( ("tag", None, "guessed_file", guessed_file.key) )
 
-    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
+    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_tag(callback, name):
     """ Returns a single Tag object to the provided callback function.
@@ -396,7 +407,7 @@ def get_tag(callback, name):
     @param name: the name of the tag object to return
     @type  name: unicode
     """
-    return __network_handler.get_object_matching_tuple( ("tag", None, name), callback )
+    return _network_handler.get_object_matching_tuple( ("tag", None, name), callback )
 
 def get_plugin_outputs(callack, audio_file=None, plugin=None):
     if audio_file is not None:
@@ -409,11 +420,11 @@ def get_plugin_outputs(callack, audio_file=None, plugin=None):
         plugin_key = None
 
     search_tuples = [ ("plugin_output", None, plugin_key, audio_key) ]
-    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
+    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugin_output(callback, audio_file, plugin):
     search_tuples = [ ("plugin_output", None, plugin.key, audio_file.key) ]
-    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
+    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugins(callback, name = None, module_name = None, plugin_output = None):
     """ Return a list of Plugin objects to the provided callback function
@@ -434,7 +445,7 @@ def get_plugins(callback, name = None, module_name = None, plugin_output = None)
     search_tuples = [ ("plugin", None, name, module_name) ]
     if plugin_output is not None:
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
-    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
+    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugin(callback, name = None, module_name = None, plugin_output = None):
     """ Return a single Plugin object to the provided callback function.
@@ -454,7 +465,7 @@ def get_plugin(callback, name = None, module_name = None, plugin_output = None):
     search_tuples = [ ("plugin", None, name, module_name) ]
     if plugin_output is not None:
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
-    return __network_handler.get_object_matching_tuples(search_tuples, callback)
+    return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
 def get_audio_files(callback, file_name=None, tag=None, guessed_tag=None, plugin_output=None):
     """ Return a list of AudioFile objects to the provided callback function.
@@ -483,7 +494,7 @@ def get_audio_files(callback, file_name=None, tag=None, guessed_tag=None, plugin
     if plugin_output is not None:
         search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.key) )
 
-    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
+    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_audio_file(callback, file_name=None, tag=None, guessed_tag=None, plugin_output=None):
     """ Return a list of AudioFile objects to the provided callback function.
@@ -512,7 +523,7 @@ def get_audio_file(callback, file_name=None, tag=None, guessed_tag=None, plugin_
     if plugin_output is not None:
         search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.key) )
 
-    return __network_handler.get_object_matching_tuples(search_tuples, callback)
+    return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
 
 def save(obj):
@@ -521,6 +532,7 @@ def save(obj):
     @param obj: the object to save
     @type  obj: Saveable
     """
+    print "saving object...", obj
     obj.save()
 
 def update_vector(callback, plugin, audio_file):
@@ -550,8 +562,8 @@ def apply_tag_to_file(audio_file, tag):
 
     # beware. i'm not sure if the framework will actually detect duplicate tuples
     # you might have to ensure uniqueness before publishing the tuples.
-    __network_handler.dht_store_tuple(tag_tuple)
-    __network_handler.dht_store_tuple(audio_tuple)
+    _network_handler.dht_store_tuple(tag_tuple)
+    _network_handler.dht_store_tuple(audio_tuple)
 
 
 def guess_tag_for_file(audio_file, tag):
@@ -560,6 +572,6 @@ def guess_tag_for_file(audio_file, tag):
 
     # beware. i'm not sure if the framework will actually detect duplicate tuples
     # you might have to ensure uniqueness before publishing the tuples.
-    __network_handler.dht_store_tuple(tag_tuple)
-    __network_handler.dht_store_tuple(audio_tuple)
+    _network_handler.dht_store_tuple(tag_tuple)
+    _network_handler.dht_store_tuple(audio_tuple)
 
