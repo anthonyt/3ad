@@ -34,8 +34,8 @@ class Plugin(object):
     def __repr__(self):
         return "<Plugin('%s','%s')>" % (self.name, self.module_name)
 
-    def create_vector(self, audiofile):
-        return PluginOutput(self.module.createVector(audiofile.file_name), self, audiofile)
+    def create_vector(self, file_name):
+        return self.module.createVector(file_name)
 
 
 class AudioFile(object):
@@ -45,15 +45,11 @@ class AudioFile(object):
     Attributes:
         name
         vector
-        tags
-        generated_tags
     """
 
     def __init__(self, file_name):
         self.file_name = file_name
         self.vector = []
-        self.tags = []
-        self.generated_tags = []
 
     def __repr__(self):
         return "<AudioFile('%s')>" % (self.file_name)
@@ -87,10 +83,8 @@ class PluginOutput(object):
         file
     """
 
-    def __init__(self, vector, plugin, audiofile):
+    def __init__(self, vector):
         self.vector = vector
-        self.plugin = plugin
-        self.file = audiofile
 
     def __repr__(self):
         return "<PluginOutput('%s')>" % (self.vector)
