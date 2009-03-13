@@ -75,7 +75,7 @@ class NetworkHandler(object):
             o = Plugin(h['name'], h['module_name'], h['key'])
 
         elif h['type'] == "plugin_output":
-            o = PluginOutput(h['vector'], h['key'])
+            o = PluginOutput(h['vector'], h['plugin_key'], h['audio_key'], h['key'])
 
         elif h['type'] == "tag":
             o = Tag(h['name'], h['vector'], h['key'])
@@ -181,15 +181,6 @@ class NetworkHandler(object):
         self.get_objects_matching_tuple(tuple_list, pick_one)
 
 
-    def save(self, obj, callback):
-        """ Save an object to permanent storage.
-
-        @param obj: the object to save
-        @type  obj: Saveable
-        """
-        pass
-
-
     def cache_get_obj(self, key):
         """
         if the object exists in our cache
@@ -246,7 +237,10 @@ class Plugin(ad3.models.abstract.Plugin):
         if self.key is None:
             self.key = self.__get_key()
 
-            my_hash = {'name': self.name, 'module_name': self.module_name, 'key': self.key}
+            my_hash = {'name': self.name,
+                       'module_name': self.module_name,
+                       'key': self.key,
+                       'type': 'plugin'}
             my_string = simplejson.encode(my_hash)
             __network_handler.dht_store_value(self.key, my_string)
 
@@ -279,12 +273,15 @@ class AudioFile(ad3.models.abstract.AudioFile):
         if self.key is None:
             self.key = self.__get_key()
 
-            my_hash = {'file_name': self.name, 'vector': self.vector, 'key': self.key}
-            my_string = simplejson.encode(my_hash)
-            __network_handler.dht_store_value(self.key, my_string)
-
             my_tuple = ("audio_file", self.key, self.name)
             __network_handler.dht_store_tuple(my_tuple)
+
+        my_hash = {'file_name': self.name,
+                   'vector': self.vector,
+                   'key': self.key,
+                   'type': 'audio_file'}
+        my_string = simplejson.encode(my_hash)
+        __network_handler.dht_store_value(self.key, my_string)
 
 class Tag(ad3.models.abstract.Tag):
     """
@@ -308,12 +305,15 @@ class Tag(ad3.models.abstract.Tag):
         if self.key is None:
             self.key = self.__get_key()
 
-            my_hash = {'name': self.name, 'vector': self.vector, 'key': self.key}
-            my_string = simplejson.encode(my_hash)
-            __network_handler.dht_store_value(self.key, my_string)
-
             my_tuple = ("tag", self.key, self.name)
             __network_handler.dht_store_tuple(my_tuple)
+
+        my_hash = {'name': self.name,
+                   'vector': self.vector,
+                   'key': self.key,
+                   'type': 'tag' }
+        my_string = simplejson.encode(my_hash)
+        __network_handler.dht_store_value(self.key, my_string)
 
 
 class PluginOutput(ad3.models.abstract.PluginOutput):
@@ -340,11 +340,6 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         if self.key is None:
             self.key = self.__get_key()
 
-            # store the object state
-            my_hash = {'vector': self.vector, 'key': self.key}
-            my_string = simplejson.encode(my_hash)
-            __network_handler.dht_store_value(self.key, my_string)
-
             # store a plugin_output row
             my_tuple = ("plugin_output", self.key, self.plugin_key, self.audio_key)
             __network_handler.dht_store_tuple(my_tuple)
@@ -356,6 +351,16 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
             # make an audio_file row for cross referencing
             audio_tuple = ("audio_file", self.audio_key, "plugin_output", self.key)
             __network_handler.dht_store_tuple(audio_tuple)
+
+        # store the object state
+        my_hash = {'vector': self.vector,
+                   'key': self.key,
+                   'plugin_key': self.plugin_key,
+                   'audio_key': self.audio_key,
+                   'type': 'plugin_output'}
+        my_string = simplejson.encode(my_hash)
+        __network_handler.dht_store_value(self.key, my_string)
+
 
 
 def get_tags(callback, name = None, audio_file = None, guessed_file = None):
@@ -390,6 +395,23 @@ def get_tag(callback, name):
     @type  name: unicode
     """
     return __network_handler.get_object_matching_tuple( ("tag", None, name), callback )
+
+def get_plugin_outputs(callack, audio_file=None, plugin=None):
+    if audio_file is not None:
+        audio_key = audio_file.key
+    else:
+        audio_key = None
+    if plugin is not None:
+        plugin_key = plugin.key
+    else:
+        plugin_key = None
+
+    search_tuples = [ ("plugin_output", None, plugin_key, audio_key) ]
+    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
+
+def get_plugin_output(callback, audio_file, plugin):
+    search_tuples = [ ("plugin_output", None, plugin.key, audio_file.key) ]
+    return __network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugins(callback, name = None, module_name = None, plugin_output = None):
     """ Return a list of Plugin objects to the provided callback function
@@ -491,13 +513,13 @@ def get_audio_file(callback, file_name=None, tag=None, guessed_tag=None, plugin_
     return __network_handler.get_object_matching_tuples(search_tuples, callback)
 
 
-def save(callback, obj):
+def save(obj):
     """ Save an object to permanent storage.
 
     @param obj: the object to save
     @type  obj: Saveable
     """
-    return __network_handler.save(obj, callback)
+    obj.save()
 
 def update_vector(callback, plugin, audio_file):
     """ Create or Replace the current PluginOutput object for the
@@ -509,14 +531,16 @@ def update_vector(callback, plugin, audio_file):
     @param audio_file: the audio file to run the plugin on
     @type  audio_file: AudioFile
     """
-    return __network_handler.update_vector(plugin, audio_file, callback)
+    vector = plugin.create_vector(audio_file.name)
+    po = PluginOutput(vector, plugin.key, audio_file.key)
+    save(po)
 
 def initialize_storage(callback):
     """ Initializes an empty storage environment.
 
     For a database, this might mean to (re)create all tables.
     """
-    return __network_handler.initialize_storage(callback)
+    pass
 
 def apply_tag_to_file(audio_file, tag):
     tag_tuple = ("tag", tag.key, "audio_file", audio_file.key)
