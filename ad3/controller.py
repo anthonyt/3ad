@@ -2,7 +2,7 @@ import sys
 import getopt
 import os
 from numpy import array, concatenate, divide, mean
-from ad3.models.sql import Database, AudioFile, Plugin, PluginOutput, Tag
+from ad3.models.dht import AudioFile, Plugin, PluginOutput, Tag
 
 class Controller(object):
 
@@ -98,22 +98,25 @@ class Controller(object):
                 file = AudioFile(file_name)
                 self.model.save(file)
 
-                num_tags = len(tags)
-                num_tagged = 0
+                if len(tags) == 0:
+                    callback(file)
+                else:
+                    num_tags = len(tags)
+                    num_tagged = 0
 
-                for tag in tags:
-                    def got_tag(t):
-                        if t is None:
-                            t = Tag(tag)
-                            self.model.save(t)
-                        self.model.apply_tag_to_file(f, t)
+                    for tag in tags:
+                        def got_tag(t):
+                            if t is None:
+                                t = Tag(tag)
+                                self.model.save(t)
+                            self.model.apply_tag_to_file(f, t)
 
-                        # call the callback after applying the final tag.
-                        num_tagged += 1
-                        if num_tagged == num_tags:
-                            callback(file)
+                            # call the callback after applying the final tag.
+                            num_tagged += 1
+                            if num_tagged == num_tags:
+                                callback(file)
 
-                    self.model.get_tag(got_tag, tag)
+                        self.model.get_tag(got_tag, tag)
 
 
         return self.model.get_audio_file(got_file, file_name=file_name)
