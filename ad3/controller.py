@@ -4,6 +4,31 @@ import os
 from numpy import array, concatenate, divide, mean
 from ad3.models.dht import AudioFile, Plugin, PluginOutput, Tag
 
+class TagAggregator(object):
+    """
+    class to facilitate getting a list of tag objects from a list of tag names
+    """
+    def __init__(self, controller, model, tag_names):
+        self.controller = controller
+        self.model = model
+        self.tag_names = tag_names #list of tag names
+        self.tag_objs = []
+
+    def go(self, callback):
+        for tag in self.tag_names:
+            def got_tag(t):
+                if t is None:
+                    t = Tag(tag)
+                    self.model.save(t)
+                self.tag_objs.append(t)
+
+                # if this is the last tag in the lot...
+                if len(self.tag_objs) == len(self.tag_names):
+                    callback(self.tag_objs)
+
+            self.model.get_tag(got_tag, tag)
+
+
 class Controller(object):
 
     def __init__(self, data_model, learning_algorithm):
@@ -101,23 +126,13 @@ class Controller(object):
                 if len(tags) == 0:
                     callback(file)
                 else:
-                    num_tags = len(tags)
-                    num_tagged = 0
+                    def got_tags(tags):
+                        for t in tags:
+                            self.model.apply_tag_to_file(file, t)
+                        callback(file)
 
-                    for tag in tags:
-                        def got_tag(t):
-                            if t is None:
-                                t = Tag(tag)
-                                self.model.save(t)
-                            self.model.apply_tag_to_file(f, t)
-
-                            # call the callback after applying the final tag.
-                            num_tagged += 1
-                            if num_tagged == num_tags:
-                                callback(file)
-
-                        self.model.get_tag(got_tag, tag)
-
+                    ta = TagAggregator(self, self.model, tags)
+                    ta.go(got_tags)
 
         return self.model.get_audio_file(got_file, file_name=file_name)
 
