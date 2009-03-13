@@ -15,25 +15,26 @@ class Euclidean(object):
         self.model = data_model
         self.tolerance = tolerable_distance
 
-    def calculate_tag_vector(self, tag):
-        files = self.model.get_audio_files(tag_names = [tag.name])
-        vector = mean([f.vector for f in files], axis=0).tolist()
-        return vector
 
-    def calculate_file_vector(self, file):
-        vector = []
-        for po in file.outputs:
-            vector.extend(po.vector)
-        return vector
+    def calculate_tag_vector(self, callback, tag):
+        def got_files(files):
+            vector = mean([f.vector for f in files], axis=0).tolist()
+            callback(vector)
 
-    def does_tag_match(self, file_name, tag_name):
-        files = self.model.get_audio_files(file_name = file_name, tag_names = [tag_name])
-        tags = self.model.get_tags(tag_name)
+        return self.model.get_audio_files(got_files, tag = tag)
 
-        # there should only be one tag and one file, maximum
-        for tag in tags:
-            for file in files:
-                if euclidean_distance(tag.vector, file.vector) <= self.tolerance:
-                    return True
+
+    def calculate_file_vector(self, callback, file):
+        def got_outputs(pos):
+            vector = []
+            for po in pos:
+                vector.extend(po.vector)
+            callback(vector)
+        return self.model.get_plugin_outputs(got_outputs, audio_file=file)
+
+
+    def does_tag_match(self, callback, file, tag):
+        if euclidean_distance(tag.vector, file.vector) <= self.tolerance:
+            return True
         return False
 
