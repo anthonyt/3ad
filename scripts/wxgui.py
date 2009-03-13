@@ -27,16 +27,18 @@ class MyMenu(wx.Frame):
         self.panels = {'demo_buttons': wx.Panel(self, -1, style=wx.SIMPLE_BORDER),
                        'toolbar': wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.RAISED_BORDER),
                        'grid': wx.Panel(self, -1, style=wx.SUNKEN_BORDER),
-                       'blah2': wx.Panel(self, -1, style=wx.NO_BORDER) }
+                       'list': wx.Panel(self, -1, style=wx.NO_BORDER) }
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
         for name in self.panels:
+            print "setting up panel:", name
             hbox.Add(self.panels[name], 1, wx.EXPAND | wx.ALL, 3)
 
         self._setupMenuBar()
         self._setupToolBar(self.panels['toolbar'])
         self._setupDemoButtons(self.panels['demo_buttons'])
         self._setupGridAndMouse(self.panels['grid'])
+        self._setupList(self.panels['list'])
 
         self.SetSizer(hbox)
 
@@ -99,6 +101,17 @@ class MyMenu(wx.Frame):
         self.SetMenuBar(menubar)
 
         self.Bind(wx.EVT_MENU, self.OnQuit, id=105)
+
+    def _setupList(self, panel):
+        box = wx.BoxSizer(wx.VERTICAL)
+        self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT)
+        self.lc.InsertColumn(0, 'File Name')
+        self.lc.InsertColumn(1, 'Tags')
+        #self.lc.SetColumnWidth(0, 140)
+        #self.lc.SetColumnWidth(1, 153)
+        box.Add(self.lc, 1, wx.EXPAND | wx.ALL, 3)
+        panel.SetSizer(box)
+
 
     def _setupToolBar(self, toolbar):
         box = wx.BoxSizer(wx.HORIZONTAL)
