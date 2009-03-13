@@ -64,12 +64,14 @@ class MyMenu(wx.Frame):
 
     def _setupDemoButtons(self, panel):
         box = wx.BoxSizer(wx.VERTICAL)
-        box.Add(wx.Button(panel, -1, "Button1"), 1)
-        box.Add(wx.Button(panel, -1, "Button2"), 1)
-        box.Add(wx.Button(panel, -1, "Button3"), 1)
+        box.Add(wx.Button(panel, 1, "Add Demo Files"), 1)
+        box.Add(wx.Button(panel, 2, "List All Files"), 1)
+        box.Add(wx.Button(panel, 3, "Add Tags for Files"), 1)
         panel.SetSizer(box)
 
-
+        self.Bind(wx.EVT_BUTTON, self.AddFiles, id=1)
+        self.Bind(wx.EVT_BUTTON, self.ListFiles, id=2)
+        self.Bind(wx.EVT_BUTTON, self.TagFiles, id=3)
 
     def _setupMenuBar(self):
         menubar = wx.MenuBar()
@@ -129,12 +131,14 @@ class MyMenu(wx.Frame):
         self.Bind(wx.EVT_TOOL, self.OnSave, id=3)
         self.Bind(wx.EVT_TOOL, self.OnExit, id=4)
 
-    def OnNew(self, event):
-        self.statusbar.SetStatusText('New Command')
-        self.node.custom('key', 'value')
 
-    def OnOpen(self, event):
-        self.statusbar.SetStatusText('Open Command')
+    def AddFiles(self, event):
+        def file_added(file):
+            print "added", file
+            print "key:", file.key
+        self.controller.add_file(file_added, 'jimmy jimmerson.wav', tags=[])
+
+    def ListFiles(self, event):
         def got_files(files):
             print files
             self.lc.DeleteAllItems()
@@ -147,12 +151,18 @@ class MyMenu(wx.Frame):
 
         self.model.get_audio_files(got_files)
 
+    def TagFiles(self, event):
+        pass
+
+    def OnNew(self, event):
+        self.statusbar.SetStatusText('New Command')
+        self.node.custom('key', 'value')
+
+    def OnOpen(self, event):
+        self.statusbar.SetStatusText('Open Command')
+
     def OnSave(self, event):
         self.statusbar.SetStatusText('Save Command')
-        def file_added(file):
-            print "added", file
-            print "key:", file.key
-        self.controller.add_file(file_added, 'jimmy jimmerson.wav', tags=[])
 
     def OnExit(self, event):
         self.OnQuit(event)
