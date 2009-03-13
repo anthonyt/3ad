@@ -108,7 +108,8 @@ class MyMenu(wx.Frame):
         box = wx.BoxSizer(wx.VERTICAL)
         self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT)
         self.lc.InsertColumn(0, 'File Name')
-        self.lc.InsertColumn(1, 'Vector')
+        self.lc.InsertColumn(1, 'Tags')
+        self.lc.InsertColumn(2, 'Vector')
         #self.lc.SetColumnWidth(0, 140)
         #self.lc.SetColumnWidth(1, 153)
         box.Add(self.lc, 1, wx.EXPAND | wx.ALL, 3)
@@ -133,10 +134,18 @@ class MyMenu(wx.Frame):
 
 
     def AddFiles(self, event):
+        file_data = [
+            ("audio/Cello note a.wav", ["cello", "strings"]),
+            ("audio/Cello note c.wav", ["cello", "strings"]),
+            ("audio/Cello note g.wav", ["cello", "strings"])
+        ]
+
         def file_added(file):
             print "added", file
             print "key:", file.key
-        self.controller.add_file(file_added, 'jimmy jimmerson.wav', tags=[])
+
+        for (fname, tags) in file_data:
+            self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+fname, tags)
 
     def ListFiles(self, event):
         def got_files(files):
@@ -145,7 +154,12 @@ class MyMenu(wx.Frame):
             for file in files:
                 num_items = self.lc.GetItemCount()
                 self.lc.InsertStringItem(num_items, file.file_name)
-                self.lc.SetStringItem(num_items, 1, str(file.vector))
+                self.lc.SetStringItem(num_items, 2, str(file.vector))
+
+                def got_tags(tags):
+                    self.lc.SetStringItem(num_items, 1, ', '.join([tag.name for tag in tags]))
+
+                self.model.get_tags(got_tags, audio_file=file)
 
             self.statusbar.SetStatusText('Got Files!')
 
