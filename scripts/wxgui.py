@@ -10,6 +10,7 @@ import entangled.kademlia.msgtypes
 from entangled.kademlia.node import rpcmethod
 import hashlib
 
+
 """
 Entangled depends on Twisted (py25-twisted) for network programming
 Entangled depends on sqlite3 (py25-sqlite3) for the SqliteDataStore class. Could just use the DictDataStore class instead.
@@ -116,13 +117,22 @@ class MyMenu(wx.Frame):
 
     def OnNew(self, event):
         self.statusbar.SetStatusText('New Command')
-        self.node.printHello('key', 'value')
+        self.node.custom('key', 'value')
 
     def OnOpen(self, event):
         self.statusbar.SetStatusText('Open Command')
+        def got_files(files):
+            print files
+            self.statusbar.SetStatusText('Got Files!')
+
+        self.model.get_audio_files(got_files)
 
     def OnSave(self, event):
         self.statusbar.SetStatusText('Save Command')
+        def file_added(file):
+            print "added", file
+            print "key:", file.key
+        self.controller.add_file(file_added, 'jimmy jimmerson.wav', tags=[])
 
     def OnExit(self, event):
         self.OnQuit(event)
@@ -143,15 +153,21 @@ class MyApp(wx.App):
         knownNodes = [('127.0.0.1', 5001)]
         udpPort = 5000
 
-        self.node = MyNode(udpPort=udpPort)#entangled.dtuple.DistributedTupleSpacePeer(udpPort=udpPort)
+        self.node = MyNode(udpPort=udpPort)
         print "joining network..."
         self.node.joinNetwork(knownNodes)
         print "joined network..."
         frame.node = self.node
 
+        nh = ad3.models.dht.NetworkHandler(self.node)
+        ad3.models.dht.set_network_handler(nh)
+
+        frame.controller = controller
+        frame.model = model
+
         return True
 
-class MyNode(entangled.node.EntangledNode):
+class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
     def sendCustomCommand(self, key, value, originalPublisherID=None, age=0):
         if originalPublisherID == None:
             originalPublisherID = self.id
@@ -164,7 +180,7 @@ class MyNode(entangled.node.EntangledNode):
         # Find k nodes closest to the key...
         df = self.iterativeFindNode(key)
         # ...and send them STORE RPCs as soon as they've been found
-        df.addCallback(executePrintHelloRPCs)
+        df.addCallback(executeCustomRPCs)
         return df
 
     @rpcmethod
@@ -172,6 +188,25 @@ class MyNode(entangled.node.EntangledNode):
         print "RECEIVED A CUSTOM RPC!"
         return "OK"
 
+
+import sys
+import os
+
+# ensure the main ad3 module is on the path
+parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if parent_dir not in sys.path:
+    sys.path.append(parent_dir)
+
+import ad3
+import ad3.models
+import ad3.models.dht
+from ad3.models.dht import AudioFile, Plugin
+from ad3.learning.euclid import Euclidean
+from ad3.controller import Controller
+
+model = ad3.models.dht
+euclid = Euclidean(model)
+controller = Controller(model, euclid)
 
 app = MyApp(0)
 
