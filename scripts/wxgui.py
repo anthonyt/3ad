@@ -91,8 +91,12 @@ class MyMenu(wx.Frame):
 
         # add some event callbacks!
         self.Bind(wx.EVT_BUTTON, self.AddFiles, id=1)
-        self.Bind(wx.EVT_BUTTON, self.ListFiles, id=2)
+        self.Bind(wx.EVT_BUTTON, self.SearchFiles, id=2)
         self.Bind(wx.EVT_BUTTON, self.TagFiles, id=3)
+
+        # set some instance variables
+        self.txt_search = txt_search
+        self.txt_tag = txt_tag
 
     def _setupList(self, panel):
         px_gap = 0
@@ -169,10 +173,12 @@ class MyMenu(wx.Frame):
 
         df.callback('First val')
 
-    def ListFiles(self, event):
+    def SearchFiles(self, event):
         def got_files(files):
             print "->", files
             self.lc.DeleteAllItems()
+            self.statusbar.SetStatusText('. . . Searching . . .')
+
             for file in files:
                 num_items = self.lc.GetItemCount()
                 self.lc.InsertStringItem(num_items, file.file_name)
@@ -186,7 +192,13 @@ class MyMenu(wx.Frame):
 
             self.statusbar.SetStatusText('Got Files!')
 
-        self.model.get_audio_files(got_files)
+        taglist = self.txt_search.GetValue()
+        if taglist == '':
+            self.model.get_audio_files(got_files)
+        else:
+            tag_names = taglist.split()
+            self.controller.find_files_by_tags(got_files, tag_names)
+
 
     def TagFiles(self, event):
         pass
