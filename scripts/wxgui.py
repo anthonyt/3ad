@@ -156,7 +156,6 @@ class MyMenu(wx.Frame):
 
         def add_file(val, file_name, tags):
 #            return self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+file_name, tags)
-            print "ADD_FILE_VAL", file_name, tags, val
             add_df = self.controller.add_file(file_added, file_name, tags)
             return add_df
 
@@ -174,10 +173,11 @@ class MyMenu(wx.Frame):
                 self.lc.InsertStringItem(num_items, file.file_name)
                 self.lc.SetStringItem(num_items, 2, str(file.vector))
 
-                def got_tags(tags):
-                    self.lc.SetStringItem(num_items, 1, ', '.join([tag.name for tag in tags]))
+                def got_tags(index, tags):
+                    tagstring = ', '.join([tag.name for tag in tags])
+                    self.lc.SetStringItem(index, 1, tagstring)
 
-                self.model.get_tags(got_tags, audio_file=file)
+                self.model.get_tags(partial(got_tags, num_items), audio_file=file)
 
             self.statusbar.SetStatusText('Got Files!')
 

@@ -18,8 +18,9 @@ class TagAggregator(object):
 
     def go(self, callback):
         df = defer.Deferred()
+        outer_df = defer.Deferred()
 
-        def handle_tag(name, t, val):
+        def handle_tag(val, name, t):
             if t is None:
                 t = Tag(name)
                 save_df = self.model.save(t)
@@ -33,19 +34,23 @@ class TagAggregator(object):
         def callback_wrapper(val):
             callback(self.tag_objs)
 
+        def done(val):
+            outer_df.addCallback(callback_wrapper)
+            outer_df.callback('fired outer tagaggregator')
+
         def got_tag(name, t):
             df.addCallback(handle_tag, name, t)
             self.num_tags_got += 1
             # if this is the last tag in the lot...
             if self.num_tags_got == len(self.tag_names):
-                df.addCallback(callback_wrapper)
+                df.addCallback(done)
                 df.callback(None)
 
         for tag in self.tag_names:
             f = partial(got_tag, tag)
             self.model.get_tag(f, tag)
 
-        return df
+        return outer_df
 
 
 class Controller(object):
@@ -138,32 +143,42 @@ class Controller(object):
 
     def add_file(self, callback, file_name, tags=[]):
         df = defer.Deferred()
+        outer_df = defer.Deferred()
 
         def got_file(file):
             print "\n"
             if file is None:
                 file = AudioFile(file_name)
 
-                save_df = self.model.save(file)
+                def save_file(val):
+                    print "SAVE_FILE_VAL", val
+                    save_df = self.model.save(file)
+                    return save_df
 
                 def return_value(val):
                     print "RETURN_VALUE_VAL", val
                     return file
 
+                def fire_outer_df(val):
+                    outer_df.addCallback(return_value)
+                    outer_df.addCallback(callback)
+                    outer_df.callback('fired outer')
+
+                df.addCallback(save_file)
+
                 if len(tags) == 0:
-                    df.addCallback(return_value)
-                    df.addCallback(callback)
+                    df.addCallback(fire_outer_df)
                 else:
                     def got_tags(tags):
                         def apply(value, file, tag):
+                            print "Attempting to apply:", tag
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
                         for t in tags:
                             df.addCallback(apply, file, t)
 
-                        df.addCallback(return_value)
-                        df.addCallback(callback)
+                        df.addCallback(fire_outer_df)
 
                     def get_tags(val):
                         ta = TagAggregator(self, self.model, tags)
@@ -173,12 +188,13 @@ class Controller(object):
                     df.addCallback(get_tags)
 
                 # when save_df.callback() is called, it will trigger df.callback(result)
-                save_df.chainDeferred(df)
+                #save_df.chainDeferred(df)
+                df.callback('fired')
 
 
         print "\n"
         self.model.get_audio_file(got_file, file_name=file_name)
-        return df
+        return outer_df
 
 
     def tag_file(self, callback, file_name, tags=[]):
