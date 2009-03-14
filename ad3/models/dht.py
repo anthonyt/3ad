@@ -63,7 +63,15 @@ class ObjectAggregator(object):
         # for each key, run our got_value function on the value row
         for key in self.key_list:
 #            print "->", "Searching for key..", key.encode('hex')
-            self.net_handler.dht_get_value(key, got_value)
+            o = self.net_handler.cache_get_obj(key)
+            if o is not None:
+                self.objects.append(o)
+                if len(self.objects) == len(self.key_list):
+                    # FIXME: this could well be a race condition with the similar statement above
+                    callback(self.objects)
+            else:
+                self.net_handler.dht_get_value(key, got_value)
+
 
 
 class NetworkHandler(object):
@@ -89,6 +97,9 @@ class NetworkHandler(object):
 
         else:
             o = None
+
+        if o is not None:
+            self.cache_store_obj(h['key'].decode('hex'), o)
 
         return o
 
@@ -210,6 +221,7 @@ class NetworkHandler(object):
         if key in self._cache:
             entry = self._cache[key]
             if int(time()) < entry[0]:
+                print "-> Fetching item from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
                 return entry[1]
 
         return None
