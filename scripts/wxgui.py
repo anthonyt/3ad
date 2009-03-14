@@ -154,15 +154,13 @@ class MyMenu(wx.Frame):
             print "--->", "added", file, file.key.encode('hex')
             return "file_added"
 
-        def add_file(file_name, tags, val):
+        def add_file(val, file_name, tags):
 #            return self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+file_name, tags)
-            print "ADD_FILE_VAL", val
+            print "ADD_FILE_VAL", file_name, tags, val
             add_df = self.controller.add_file(file_added, file_name, tags)
             return add_df
 
         for (file_name, tags) in file_data:
-#            f = partial(add_file, file_name, tags)
-#            df.addCallback(f)
             df.addCallback(add_file, file_name, tags)
 
         df.callback('First val')
@@ -267,6 +265,8 @@ import ad3.models.dht
 from ad3.models.dht import AudioFile, Plugin
 from ad3.learning.euclid import Euclidean
 from ad3.controller import Controller
+
+defer.setDebugging(True)
 
 model = ad3.models.dht
 euclid = Euclidean(model)

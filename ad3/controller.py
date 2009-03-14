@@ -34,8 +34,7 @@ class TagAggregator(object):
             callback(self.tag_objs)
 
         def got_tag(name, t):
-            f = partial(handle_tag, name, t)
-            df.addCallback(f)
+            df.addCallback(handle_tag, name, t)
             self.num_tags_got += 1
             # if this is the last tag in the lot...
             if self.num_tags_got == len(self.tag_names):
@@ -152,16 +151,15 @@ class Controller(object):
                     return file
 
                 if len(tags) == 0:
-                    df.addCallback(callback, file)
+                    df.addCallback(return_value)
+                    df.addCallback(callback)
                 else:
                     def got_tags(tags):
-                        def apply(file, tag, value):
+                        def apply(value, file, tag):
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
                         for t in tags:
-#                            f = partial(apply, file, t)
-#                            df.addCallback(f)
                             df.addCallback(apply, file, t)
 
                         df.addCallback(return_value)
