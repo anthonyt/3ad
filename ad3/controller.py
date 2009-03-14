@@ -250,18 +250,34 @@ class Controller(object):
         return outer_df
 
 
-    def tag_file(self, callback, file_name, tags=[]):
-        def got_file(file):
-            if len(tags) == 0:
-                callback(tags)
-            else:
-                def got_tags(tags):
-                    for t in tags:
-                        self.model.apply_tag_to_file(file, t)
-                    callback(tags)
+    def tag_files(self, callback, file_list, tag_names=[]):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
 
-                ta = TagAggregator(self, self.model, tags, True)
-                ta.go(got_tags)
+        def apply_tag(val, file, tag):
+            a_df = self.model.apply_tag_to_file(file, tag)
+            return a_df
+
+        def got_tags(tags):
+            for t in tags:
+                for file in file_list:
+                    df.addCallback(apply_tag, file, t)
+
+            df.addCallback(outer_df.callback)
+
+        def get_tags(val):
+            ta = TagAggregator(self, self.model, tag_names, True)
+            ta_df = ta.go(got_tags)
+            return ta_df
+
+        if len(tag_names) == 0:
+            outer_df.callback(None)
+        else:
+            df = defer.Deferred()
+            df.addCallback(get_tags)
+            df.callback(None)
+
+        return outer_df
 
 
     def add_plugin(self, callback, name, module_name):
