@@ -209,7 +209,20 @@ class MyMenu(wx.Frame):
 
 
     def TagFiles(self, event):
-        pass
+        i = self.lc.GetFirstSelected()
+        indexes = []
+        while i >= 0:
+            indexes.append(i)
+            i = self.lc.GetNextSelected(i)
+
+        selected_files = [self.displayed_files[i] for i in indexes]
+        tag_string = self.txt_tag.GetValue()
+        tag_names = tag_string.split()
+
+        def tagged(val):
+            self.SetStatusText('Tagged successfully')
+
+        df = self.controller.tag_files(tagged, selected_files, tag_names)
 
     def OnQuit(self, event):
         self.Close()
