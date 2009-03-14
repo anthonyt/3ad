@@ -9,10 +9,12 @@ class TagAggregator(object):
     """
     class to facilitate getting a list of tag objects from a list of tag names
     """
-    def __init__(self, controller, model, tag_names):
+    def __init__(self, controller, model, tag_names, force_creation):
         self.controller = controller
         self.model = model
         self.tag_names = tag_names #list of tag names
+        self.force_creation = force_creation
+
         self.tag_objs = []
         self.num_tags_got = 0
 
@@ -21,13 +23,15 @@ class TagAggregator(object):
         outer_df = defer.Deferred()
 
         def handle_tag(val, name, t):
-            if t is None:
+            # only create the missing tag if force_creation is enabled
+            if t is None and self.force_creation:
                 t = Tag(name)
                 save_df = self.model.save(t)
             else:
                 save_df = None
 
-            self.tag_objs.append(t)
+            if t is not None:
+                self.tag_objs.append(t)
 
             return save_df
 
@@ -175,7 +179,7 @@ class Controller(object):
                         df.addCallback(fire_outer_df)
 
                     def get_tags(val):
-                        ta = TagAggregator(self, self.model, tags)
+                        ta = TagAggregator(self, self.model, tags, True)
                         ta_df = ta.go(got_tags)
                         return ta_df
 
@@ -203,7 +207,7 @@ class Controller(object):
                         self.model.apply_tag_to_file(file, t)
                     callback(tags)
 
-                ta = TagAggregator(self, self.model, tags)
+                ta = TagAggregator(self, self.model, tags, True)
                 ta.go(got_tags)
 
 
