@@ -4,6 +4,7 @@ from numpy import array, concatenate, divide, mean
 from ad3.models.dht import AudioFile, Plugin, PluginOutput, Tag
 from twisted.internet import defer
 from functools import partial
+from sets import Set
 
 class TagAggregator(object):
     """
@@ -53,6 +54,72 @@ class TagAggregator(object):
         for tag in self.tag_names:
             f = partial(got_tag, tag)
             self.model.get_tag(f, tag)
+
+        return outer_df
+
+class FileAggregator(object):
+    def __init__(self, controller, model, tag_list):
+        self.controller = controller
+        self.model = model
+        self.tag_list = tag_list #list of tag objects
+
+        self.num_got_tagged = 0
+        self.tagged_lists = []
+
+        self.num_got_guessed = 0
+        self.guessed_lists = []
+
+    def go(self, callback):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
+
+        def got_all_files():
+            # find all files that have been tagged with all provided tags
+            if len(self.tagged_lists) < 1:
+                tagged = []
+            else:
+                tagged = Set(self.tagged_lists[0])
+                for fl in self.tagged_lists[1:]:
+                    tagged = tagged.intersection(fl)
+
+            # find all files that have been guessed with all provided tags
+            if len(self.guessed_lists) < 1:
+                guessed = []
+            else:
+                guessed = Set(self.guessed_lists[0])
+                for fl in self.guessed_lists[1:]:
+                    guessed = guessed.intersection(fl)
+
+            # make a new list, containing all unique elements in both sets
+            files = list(tagged.union(guessed))
+
+            # start the callback chain
+            outer_df.callback(files)
+
+        def got_files(type, files):
+            if type == 'tagged':
+                if files is not None:
+                    self.tagged_lists.append(files)
+                self.num_got_tagged += 1
+            elif type == 'guessed':
+                if files is not None:
+                    self.guessed_lists.append(files)
+                self.num_got_guessed += 1
+
+            # if we have got all the values we asked for,
+            # find the common keys, and call the callback function
+            if self.num_got_tagged + self.num_got_guessed == 2*len(self.tag_list):
+                got_all_files()
+
+
+
+        if len(self.tag_list) < 1:
+            outer_df.addCallback(callback_wrapper, [])
+            outer_df.callback(None)
+        else:
+            for tag in self.tag_list:
+                self.model.get_audio_files(partial(got_files, 'tagged'), tag=tag)
+                self.model.get_audio_files(partial(got_files, 'guessed'), guessed_tag=tag)
 
         return outer_df
 
@@ -221,7 +288,32 @@ class Controller(object):
         self.model.get_plugin(got_plugin, name=name, module_name=module_name)
 
 
-    def find_files_by_tag(self, callback, tag):
-        return self.model.get_audio_files(callback, guessed_tag=tag)
+    def find_files_by_tags(self, callback, tag_names):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
 
+        def got_files(files):
+            outer_df.callback(files)
+
+        def got_tags(tags):
+            if len(tags) != len(tag_names):
+                # if we got back fewer tags than we searched for,
+                # it means that not all tags exist. thus no file will have all those tags
+                # thus we can stop looking
+                outer_df.callback([])
+                return None
+            else:
+                fa = FileAggregator(self, self.model, tags)
+                fa_df = fa.go(got_files)
+                return fa_df
+
+        def get_tags():
+            ta = TagAggregator(self, self.model, tag_names, False)
+            ta_df = ta.go(got_tags)
+            return ta_df
+
+        # start searching...
+        get_tags()
+
+        return outer_df
 
