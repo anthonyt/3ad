@@ -2,13 +2,17 @@
 
 import wx
 import sys
+import time
 from twisted.internet import wxreactor; wxreactor.install()
 from twisted.internet import reactor
+from twisted.internet import defer
 import entangled.dtuple
 import entangled.kademlia.contact
 import entangled.kademlia.msgtypes
 from entangled.kademlia.node import rpcmethod
 import hashlib
+import cPickle
+from functools import partial
 
 
 """
@@ -135,17 +139,30 @@ class MyMenu(wx.Frame):
 
     def AddFiles(self, event):
         file_data = [
-            ("audio/Cello note a.wav", ["cello", "strings"]),
-            ("audio/Cello note c.wav", ["cello", "strings"]),
-            ("audio/Cello note g.wav", ["cello", "strings"])
+#            ("audio/Cello note a.wav", ["cello", "strings"]),
+#            ("audio/Cello note c.wav", ["cello", "strings"]),
+#            ("audio/Cello note g.wav", ["cello", "strings"])
+            ("audio/Cello note a.wav", []),
+            ("audio/Cello note c.wav", []),
+            ("audio/Cello note g.wav", [])
+#            (str(int(time.time())), [])
         ]
 
-        def file_added(file):
-            print "added", file
-            print "key:", file.key
+        df = defer.Deferred()
 
-        for (fname, tags) in file_data:
-            self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+fname, tags)
+        def file_added(file):
+            print "--->", "added", file, file.key.encode('hex')
+            return "file_added"
+
+        def add_file(val, file_name, tags):
+#            return self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+file_name, tags)
+            add_df = self.controller.add_file(file_added, file_name, tags)
+            return add_df
+
+        for (file_name, tags) in file_data:
+            df.addCallback(add_file, file_name, tags)
+
+        df.callback('First val')
 
     def ListFiles(self, event):
         def got_files(files):
@@ -156,10 +173,11 @@ class MyMenu(wx.Frame):
                 self.lc.InsertStringItem(num_items, file.file_name)
                 self.lc.SetStringItem(num_items, 2, str(file.vector))
 
-                def got_tags(tags):
-                    self.lc.SetStringItem(num_items, 1, ', '.join([tag.name for tag in tags]))
+                def got_tags(index, tags):
+                    tagstring = ', '.join([tag.name for tag in tags])
+                    self.lc.SetStringItem(index, 1, tagstring)
 
-                self.model.get_tags(got_tags, audio_file=file)
+                self.model.get_tags(partial(got_tags, num_items), audio_file=file)
 
             self.statusbar.SetStatusText('Got Files!')
 
@@ -247,6 +265,8 @@ import ad3.models.dht
 from ad3.models.dht import AudioFile, Plugin
 from ad3.learning.euclid import Euclidean
 from ad3.controller import Controller
+
+defer.setDebugging(True)
 
 model = ad3.models.dht
 euclid = Euclidean(model)
