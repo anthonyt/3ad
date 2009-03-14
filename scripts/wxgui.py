@@ -111,9 +111,12 @@ class MyMenu(wx.Frame):
         self.lc = wx.ListCtrl(panel, -1, style=wx.LC_REPORT)
         self.lc.InsertColumn(0, 'File Name')
         self.lc.InsertColumn(1, 'Tags')
-        self.lc.InsertColumn(2, 'Vector')
-        #self.lc.SetColumnWidth(0, 140)
-        #self.lc.SetColumnWidth(1, 153)
+        self.lc.InsertColumn(2, 'File Path')
+        self.lc.InsertColumn(3, 'Vector')
+        self.lc.SetColumnWidth(0, 200)
+        self.lc.SetColumnWidth(1, 200)
+        self.lc.SetColumnWidth(2, 150)
+        self.lc.SetColumnWidth(3, 150)
 
         sizer.Add(self.lc, (0, 0), flag=wx.EXPAND)
         sizer.AddGrowableRow(0)
@@ -189,8 +192,10 @@ class MyMenu(wx.Frame):
 
             for file in files:
                 num_items = self.lc.GetItemCount()
-                self.lc.InsertStringItem(num_items, file.file_name)
-                self.lc.SetStringItem(num_items, 2, str(file.vector))
+                (dir, file_name) = os.path.split(file.file_name)
+                self.lc.InsertStringItem(num_items, file_name)
+                self.lc.SetStringItem(num_items, 2, dir)
+                self.lc.SetStringItem(num_items, 3, str(file.vector))
 
                 def got_tags(index, tags):
                     tagstring = ', '.join([tag.name for tag in tags])
