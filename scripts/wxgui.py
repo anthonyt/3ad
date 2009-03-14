@@ -35,7 +35,7 @@ class MyMenu(wx.Frame):
 
         hbox = wx.BoxSizer(wx.HORIZONTAL)
         for name in self.panels:
-            print "setting up panel:", name
+            print "->", "setting up panel:", name
             hbox.Add(self.panels[name], 1, wx.EXPAND | wx.ALL, 3)
 
         self._setupMenuBar()
@@ -166,7 +166,7 @@ class MyMenu(wx.Frame):
 
     def ListFiles(self, event):
         def got_files(files):
-            print files
+            print "->", files
             self.lc.DeleteAllItems()
             for file in files:
                 num_items = self.lc.GetItemCount()
@@ -212,13 +212,13 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, 'My Demo Program!')
         frame.Show(True)
 
-        knownNodes = [('127.0.0.1', 5001)]
+        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
         udpPort = 5000
 
         self.node = MyNode(udpPort=udpPort)
-        print "joining network..."
+        print "->", "joining network..."
         self.node.joinNetwork(knownNodes)
-        print "joined network..."
+        print "->", "joined network..."
         frame.node = self.node
 
         nh = ad3.models.dht.NetworkHandler(self.node)

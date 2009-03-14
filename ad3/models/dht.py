@@ -62,7 +62,7 @@ class ObjectAggregator(object):
 
         # for each key, run our got_value function on the value row
         for key in self.key_list:
-            print "Searching for key..", key
+#            print "->", "Searching for key..", key.encode('hex')
             self.net_handler.dht_get_value(key, got_value)
 
 
@@ -72,7 +72,7 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        print "OBJ FROM ROW", row
+        print "->", "OBJ FROM ROW", row
         h = simplejson.loads(row)
 
         if h['type'] == "plugin":
@@ -94,7 +94,7 @@ class NetworkHandler(object):
 
 
     def hash_function(self, plain_key):
-        print "HASHING!"
+        print "->", "Generating a hash for", plain_key
         h = hashlib.sha1()
         h.update(plain_key)
         return h.digest()
@@ -109,7 +109,7 @@ class NetworkHandler(object):
                 return None
 
         def error(failure):
-            print 'An error occurred:', failure.getErrorMessage()
+            print "->", 'An error occurred:', failure.getErrorMessage()
             callback(None)
 
         df = self.node.iterativeFindValue(key)
@@ -123,8 +123,9 @@ class NetworkHandler(object):
 
     def dht_store_value(self, key, value):
         def success(result):
-            print 'stored value:', result
+            print "->", 'stored value:', result
 
+        print "->", "Attempting to store value", key.encode('hex'), "=>", value
         df = self.node.iterativeStore(key, value)
         df.addCallback(success)
         return df
@@ -138,10 +139,10 @@ class NetworkHandler(object):
             callback(result)
 
         def error(failure):
-            print 'an error occurred:', failure.getErrorMessage()
+            print "->", 'an error occurred:', failure.getErrorMessage()
             callback(None)
 
-        print "searching for tuples based on", dTuple
+#        print "->", "searching for tuples based on", dTuple
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -149,10 +150,11 @@ class NetworkHandler(object):
 
     def dht_store_tuple(self, dTuple):
         def success(result):
-            print 'stored tuple:', result
+            print "->", 'stored tuple:', result
+            return "dht_store_tuple"
 
         def error(failure):
-            print 'an error occurred:', failure.getErrorMessage()
+            print "->", 'an error occurred:', failure.getErrorMessage()
 
         print "->", "Attempting to store tuple:", dTuple
         df = self.node.put(dTuple, trackUsage=False)
@@ -170,14 +172,16 @@ class NetworkHandler(object):
         """
         def got_keys(keys):
             if len(keys) == 0:
+                print "->", "KA object found nothing."
                 callback([])
             else:
                 # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
+                print "->", "KA object found", len(keys), "keys. Making a OA object with key list."
                 ta = ObjectAggregator(self, keys)
                 ta.go(callback)
 
-        print "Making a KA object with tuple list:", tuple_list
+        print "->", "Making a KA object with tuple list:", tuple_list
         ka = KeyAggregator(self, tuple_list)
         ka.go(got_keys)
 
@@ -226,7 +230,7 @@ def set_network_handler(obj):
     should be an instance of the network handler class above
     will be used by all functions below
     """
-    print "setting network handler!", obj
+    print "->", "setting network handler!", obj
     global _network_handler
     _network_handler = obj
 
@@ -289,17 +293,13 @@ class AudioFile(ad3.models.abstract.AudioFile):
         self.key = key
 
     def __get_key(self):
-        print "getting key..."
         r = _network_handler.hash_function("audio_file_" + self.file_name)
-        print "got key"
-        print r
         return r
 
     def save(self):
-        print "I'm IN"
         if self.key is None:
             self.key = self.__get_key()
-            print "Setting key for the first time...", self.key
+            print "->", "Setting key for the first time...", self.key.encode('hex')
 
             my_tuple = ("audio_file", self.key, self.file_name)
             df = _network_handler.dht_store_tuple(my_tuple)

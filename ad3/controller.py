@@ -69,10 +69,10 @@ class Controller(object):
             num_calculated = 0
 
             for tag in tags:
-                print "Fetching vector for", tag
+                print "->", "Fetching vector for", tag
 
                 def got_vector(vector):
-                    print "Saving vector for", tag
+                    print "->", "Saving vector for", tag
 
                     tag.vector = vector
                     self.model.save(tag)
@@ -91,7 +91,7 @@ class Controller(object):
             for plugin in plugins:
                 for file in files:
                     # FIXME: this will soon have to be asynchronous.
-                    print "Creating vector for", file, plugin
+                    print "->", "Creating vector for", file, plugin
                     self.model.update_vector(plugin, file)
 
             num_files = len(files)
@@ -101,13 +101,13 @@ class Controller(object):
                 def got_file_vector(vector):
                     file.vector = vector
                     self.model.save(file)
-                    print "Updating vector for", file
+                    print "->", "Updating vector for", file
 
                     # ensure that the callback function is called only on the
                     # saving of the final file vector
                     num_vectors += 1
                     if num_vectors == num_files:
-                        print "Updated %d plugins for %d files" % (len(plugins), len(files))
+                        print "->", "Updated %d plugins for %d files" % (len(plugins), len(files))
                         callback()
 
                 self.mine.calculate_file_vector(got_file_vector, file)
@@ -127,7 +127,7 @@ class Controller(object):
                 for tag in tags:
                     if self.mine.does_tag_match(file, tag):
                         self.model.guess_tag_for_file(file, tag)
-                        print "GENERATED: ", file, tag
+                        print "->", "GENERATED: ", file, tag
             callback()
 
         # take care of fetching the tag and audio file objects...
