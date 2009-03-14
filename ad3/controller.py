@@ -144,6 +144,7 @@ class Controller(object):
     def add_file(self, callback, file_name, tags=[]):
         df = defer.Deferred()
         outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
 
         def got_file(file):
             print "\n"
@@ -151,18 +152,11 @@ class Controller(object):
                 file = AudioFile(file_name)
 
                 def save_file(val):
-                    print "SAVE_FILE_VAL", val
                     save_df = self.model.save(file)
                     return save_df
 
-                def return_value(val):
-                    print "RETURN_VALUE_VAL", val
-                    return file
-
                 def fire_outer_df(val):
-                    outer_df.addCallback(return_value)
-                    outer_df.addCallback(callback)
-                    outer_df.callback('fired outer')
+                    outer_df.callback(file)
 
                 df.addCallback(save_file)
 
@@ -187,9 +181,11 @@ class Controller(object):
 
                     df.addCallback(get_tags)
 
-                # when save_df.callback() is called, it will trigger df.callback(result)
-                #save_df.chainDeferred(df)
                 df.callback('fired')
+            else:
+                # if a matching file already exists, return None to the callback method
+                # and signal outer_df as being completed.
+                outer_df.callback(None)
 
 
         print "\n"
