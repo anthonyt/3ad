@@ -63,54 +63,35 @@ class FileAggregator(object):
         self.model = model
         self.tag_list = tag_list #list of tag objects
 
-        self.num_got_tagged = 0
-        self.tagged_lists = []
-
-        self.num_got_guessed = 0
-        self.guessed_lists = []
+        self.num_got_files = 0
+        self.file_lists = {}
 
     def go(self, callback):
         outer_df = defer.Deferred()
         outer_df.addCallback(callback)
 
         def got_all_files():
-            # find all files that have been tagged with all provided tags
-            if len(self.tagged_lists) < 1:
-                tagged = []
-            else:
-                tagged = Set(self.tagged_lists[0])
-                for fl in self.tagged_lists[1:]:
-                    tagged = tagged.intersection(fl)
-
-            # find all files that have been guessed with all provided tags
-            if len(self.guessed_lists) < 1:
-                guessed = []
-            else:
-                guessed = Set(self.guessed_lists[0])
-                for fl in self.guessed_lists[1:]:
-                    guessed = guessed.intersection(fl)
-
-            # make a new list, containing all unique elements in both sets
-            files = list(tagged.union(guessed))
+            # find the Set of files such that every file belongs to every tag
+            files = None
+            for tag_name in self.file_lists:
+                if files is None:
+                    print self.file_lists[tag_name]
+                    files = Set(self.file_lists[tag_name])
+                else:
+                    files = files.intersection(self.file_lists[tag_name])
 
             # start the callback chain
-            outer_df.callback(files)
+            outer_df.callback(list(files))
 
-        def got_files(type, files):
-            if type == 'tagged':
-                if files is not None:
-                    self.tagged_lists.append(files)
-                self.num_got_tagged += 1
-            elif type == 'guessed':
-                if files is not None:
-                    self.guessed_lists.append(files)
-                self.num_got_guessed += 1
+        def got_files(tag_name, files):
+            if files is not None:
+                self.file_lists[tag_name].extend(files)
+            self.num_got_files += 1
 
             # if we have got all the values we asked for,
             # find the common keys, and call the callback function
-            if self.num_got_tagged + self.num_got_guessed == 2*len(self.tag_list):
+            if self.num_got_files == 2*len(self.tag_list):
                 got_all_files()
-
 
 
         if len(self.tag_list) < 1:
@@ -118,8 +99,9 @@ class FileAggregator(object):
             outer_df.callback(None)
         else:
             for tag in self.tag_list:
-                self.model.get_audio_files(partial(got_files, 'tagged'), tag=tag)
-                self.model.get_audio_files(partial(got_files, 'guessed'), guessed_tag=tag)
+                self.file_lists[tag.name] = []
+                self.model.get_audio_files(partial(got_files, tag.name), tag=tag)
+                self.model.get_audio_files(partial(got_files, tag.name), guessed_tag=tag)
 
         return outer_df
 
