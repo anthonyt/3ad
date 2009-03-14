@@ -148,9 +148,9 @@ class MyMenu(wx.Frame):
 
     def AddFiles(self, event):
         file_data = [
-            ("audio/Cello note a.wav", ["cello", "strings"]),
-            ("audio/Cello note c.wav", ["cello", "strings"]),
-            ("audio/Cello note g.wav", ["cello", "strings"])
+            (u"audio/Cello note a.wav", [u"cello", u"strings", u"a"]),
+            (u"audio/Cello note c.wav", [u"cello", u"strings", u"c"]),
+            (u"audio/Cello note g.wav", [u"cello", u"strings", u"g"])
 #            ("audio/Cello note a.wav", []),
 #            ("audio/Cello note c.wav", []),
 #            ("audio/Cello note g.wav", [])
