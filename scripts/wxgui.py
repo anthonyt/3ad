@@ -28,15 +28,22 @@ class MyMenu(wx.Frame):
     def __init__(self, parent, id, title):
         wx.Frame.__init__(self, parent, id, title, wx.DefaultPosition, wx.Size(600, 450))
 
+        # setup some uninitialized instance variables
+        self.txt_search = None
+        self.txt_tag = None
+        self.lc = None
+        self.displayed_files = []
         self.panels = {'buttons': wx.Panel(self, -1, style=wx.SIMPLE_BORDER),
                        'list': wx.Panel(self, -1, style=wx.SIMPLE_BORDER) }
 
+        # setup the layout of the main panel
         sizer = wx.BoxSizer(wx.HORIZONTAL)
         px_border = 3
         sizer.Add(self.panels['buttons'], 0, wx.EXPAND | wx.ALL, px_border)
         sizer.Add(self.panels['list'], 1, wx.EXPAND | wx.TOP | wx.RIGHT | wx.BOTTOM, px_border)
         self.SetSizer(sizer)
 
+        # setup the individual components
         self._setupMenuBar()
         self._setupButtons(self.panels['buttons'])
         self._setupList(self.panels['list'])
@@ -177,6 +184,7 @@ class MyMenu(wx.Frame):
         def got_files(files):
             print "->", files
             self.lc.DeleteAllItems()
+            self.displayed_files = files
             self.statusbar.SetStatusText('. . . Searching . . .')
 
             for file in files:
