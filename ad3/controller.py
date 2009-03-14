@@ -1,8 +1,9 @@
 import sys
-import getopt
 import os
 from numpy import array, concatenate, divide, mean
 from ad3.models.dht import AudioFile, Plugin, PluginOutput, Tag
+from twisted.internet import defer
+from functools import partial
 
 class TagAggregator(object):
     """
@@ -13,20 +14,39 @@ class TagAggregator(object):
         self.model = model
         self.tag_names = tag_names #list of tag names
         self.tag_objs = []
+        self.num_tags_got = 0
 
     def go(self, callback):
+        df = defer.Deferred()
+
+        def handle_tag(name, t, val):
+            if t is None:
+                t = Tag(name)
+                save_df = self.model.save(t)
+            else:
+                save_df = None
+
+            self.tag_objs.append(t)
+
+            return save_df
+
+        def callback_wrapper(val):
+            callback(self.tag_objs)
+
+        def got_tag(name, t):
+            f = partial(handle_tag, name, t)
+            df.addCallback(f)
+            self.num_tags_got += 1
+            # if this is the last tag in the lot...
+            if self.num_tags_got == len(self.tag_names):
+                df.addCallback(callback_wrapper)
+                df.callback(None)
+
         for tag in self.tag_names:
-            def got_tag(t):
-                if t is None:
-                    t = Tag(tag)
-                    self.model.save(t)
-                self.tag_objs.append(t)
+            f = partial(got_tag, tag)
+            self.model.get_tag(f, tag)
 
-                # if this is the last tag in the lot...
-                if len(self.tag_objs) == len(self.tag_names):
-                    callback(self.tag_objs)
-
-            self.model.get_tag(got_tag, tag)
+        return df
 
 
 class Controller(object):
@@ -59,7 +79,7 @@ class Controller(object):
 
                 self.mine.calculate_tag_vector(got_vector, tag)
 
-        return self.model.get_tags(got_tags, name=tag_name)
+        self.model.get_tags(got_tags, name=tag_name)
 
 
     def create_vectors(self, callback, file_name=None, plugin_name=None):
@@ -94,7 +114,7 @@ class Controller(object):
                 got_data(files, plugins)
             plugins = self.model.get_plugins(got_plugins, name=plugin_name)
 
-        return self.model.get_audio_files(got_files, file_name=file_name)
+        self.model.get_audio_files(got_files, file_name=file_name)
 
 
     def guess_tags(self, callback, audio_file=None):
@@ -114,27 +134,53 @@ class Controller(object):
                 self.model.get_audio_files(got_files)
             else:
                 got_data([audio_file], tags)
-        return self.model.get_tags(got_tags)
+        self.model.get_tags(got_tags)
 
 
     def add_file(self, callback, file_name, tags=[]):
+        df = defer.Deferred()
+
         def got_file(file):
+            print "\n"
             if file is None:
                 file = AudioFile(file_name)
-                self.model.save(file)
+
+                save_df = self.model.save(file)
+
+                def return_value(val):
+                    print "RETURN_VALUE_VAL", val
+                    return file
 
                 if len(tags) == 0:
-                    callback(file)
+                    df.addCallback(callback, file)
                 else:
                     def got_tags(tags):
+                        def apply(file, tag, value):
+                            tag_df = self.model.apply_tag_to_file(file, tag)
+                            return tag_df
+
                         for t in tags:
-                            self.model.apply_tag_to_file(file, t)
-                        callback(file)
+#                            f = partial(apply, file, t)
+#                            df.addCallback(f)
+                            df.addCallback(apply, file, t)
 
-                    ta = TagAggregator(self, self.model, tags)
-                    ta.go(got_tags)
+                        df.addCallback(return_value)
+                        df.addCallback(callback)
 
-        return self.model.get_audio_file(got_file, file_name=file_name)
+                    def get_tags(val):
+                        ta = TagAggregator(self, self.model, tags)
+                        ta_df = ta.go(got_tags)
+                        return ta_df
+
+                    df.addCallback(get_tags)
+
+                # when save_df.callback() is called, it will trigger df.callback(result)
+                save_df.chainDeferred(df)
+
+
+        print "\n"
+        self.model.get_audio_file(got_file, file_name=file_name)
+        return df
 
 
     def tag_file(self, callback, file_name, tags=[]):
@@ -158,7 +204,7 @@ class Controller(object):
                 self.model.save(plugin)
                 callback(plugin)
 
-        return self.model.get_plugin(got_plugin, name=name, module_name=module_name)
+        self.model.get_plugin(got_plugin, name=name, module_name=module_name)
 
 
     def find_files_by_tag(self, callback, tag):

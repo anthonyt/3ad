@@ -2,13 +2,17 @@
 
 import wx
 import sys
+import time
 from twisted.internet import wxreactor; wxreactor.install()
 from twisted.internet import reactor
+from twisted.internet import defer
 import entangled.dtuple
 import entangled.kademlia.contact
 import entangled.kademlia.msgtypes
 from entangled.kademlia.node import rpcmethod
 import hashlib
+import cPickle
+from functools import partial
 
 
 """
@@ -135,17 +139,33 @@ class MyMenu(wx.Frame):
 
     def AddFiles(self, event):
         file_data = [
-            ("audio/Cello note a.wav", ["cello", "strings"]),
-            ("audio/Cello note c.wav", ["cello", "strings"]),
-            ("audio/Cello note g.wav", ["cello", "strings"])
+#            ("audio/Cello note a.wav", ["cello", "strings"]),
+#            ("audio/Cello note c.wav", ["cello", "strings"]),
+#            ("audio/Cello note g.wav", ["cello", "strings"])
+            ("audio/Cello note a.wav", []),
+            ("audio/Cello note c.wav", []),
+            ("audio/Cello note g.wav", [])
+#            (str(int(time.time())), [])
         ]
 
-        def file_added(file):
-            print "added", file
-            print "key:", file.key
+        df = defer.Deferred()
 
-        for (fname, tags) in file_data:
-            self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+fname, tags)
+        def file_added(file):
+            print "--->", "added", file, file.key.encode('hex')
+            return "file_added"
+
+        def add_file(file_name, tags, val):
+#            return self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+file_name, tags)
+            print "ADD_FILE_VAL", val
+            add_df = self.controller.add_file(file_added, file_name, tags)
+            return add_df
+
+        for (file_name, tags) in file_data:
+#            f = partial(add_file, file_name, tags)
+#            df.addCallback(f)
+            df.addCallback(add_file, file_name, tags)
+
+        df.callback('First val')
 
     def ListFiles(self, event):
         def got_files(files):

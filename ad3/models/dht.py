@@ -3,6 +3,7 @@ import simplejson
 import hashlib
 from time import time
 from sets import Set
+from twisted.internet import defer
 
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
@@ -116,7 +117,8 @@ class NetworkHandler(object):
         # passing it to the callback
         df.addCallback(success)
         df.addCallback(callback)
-        df.addErrback(error)
+#        df.addErrback(error)
+        return df
 
 
     def dht_store_value(self, key, value):
@@ -125,6 +127,7 @@ class NetworkHandler(object):
 
         df = self.node.iterativeStore(key, value)
         df.addCallback(success)
+        return df
 
 
     def dht_get_tuples(self, dTuple, callback):
@@ -142,6 +145,7 @@ class NetworkHandler(object):
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
+        return df
 
     def dht_store_tuple(self, dTuple):
         def success(result):
@@ -150,10 +154,11 @@ class NetworkHandler(object):
         def error(failure):
             print 'an error occurred:', failure.getErrorMessage()
 
-        print "Attempting to store tuple:", dTuple
-        df = self.node.put(dTuple)
+        print "->", "Attempting to store tuple:", dTuple
+        df = self.node.put(dTuple, trackUsage=False)
         df.addCallback(success)
-        df.addErrback(error)
+#        df.addErrback(error)
+        return df
 
 
     def get_objects_matching_tuples(self, tuple_list, callback):
@@ -259,7 +264,10 @@ class Plugin(ad3.models.abstract.Plugin):
             _network_handler.dht_store_value(self.key, my_string)
 
             my_tuple = ("plugin", self.key, self.name, self.module_name)
-            _network_handler.dht_store_tuple(my_tuple)
+            df =  _network_handler.dht_store_tuple(my_tuple)
+        else:
+            df = None
+        return df
 
 class AudioFile(ad3.models.abstract.AudioFile):
     """
@@ -294,7 +302,9 @@ class AudioFile(ad3.models.abstract.AudioFile):
             print "Setting key for the first time...", self.key
 
             my_tuple = ("audio_file", self.key, self.file_name)
-            _network_handler.dht_store_tuple(my_tuple)
+            df = _network_handler.dht_store_tuple(my_tuple)
+        else:
+            df = None
 
         my_hash = {'file_name': self.file_name,
                    'vector': self.vector,
@@ -302,6 +312,8 @@ class AudioFile(ad3.models.abstract.AudioFile):
                    'type': 'audio_file'}
         my_string = simplejson.dumps(my_hash)
         _network_handler.dht_store_value(self.key, my_string)
+
+        return df
 
 class Tag(ad3.models.abstract.Tag):
     """
@@ -326,7 +338,9 @@ class Tag(ad3.models.abstract.Tag):
             self.key = self.__get_key()
 
             my_tuple = ("tag", self.key, self.name)
-            _network_handler.dht_store_tuple(my_tuple)
+            df = _network_handler.dht_store_tuple(my_tuple)
+        else:
+            df = None
 
         my_hash = {'name': self.name,
                    'vector': self.vector,
@@ -334,6 +348,7 @@ class Tag(ad3.models.abstract.Tag):
                    'type': 'tag' }
         my_string = simplejson.dumps(my_hash)
         _network_handler.dht_store_value(self.key, my_string)
+        return df
 
 
 class PluginOutput(ad3.models.abstract.PluginOutput):
@@ -360,17 +375,24 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         if self.key is None:
             self.key = self.__get_key()
 
+            def save_audio_tuple():
+                # make an audio_file row for cross referencing
+                audio_tuple = ("audio_file", self.audio_key, "plugin_output", self.key)
+                df = _network_handler.dht_store_tuple(audio_tuple)
+                return df
+
+            def save_plugin_tuple():
+                # make a plugin row for cross referencing
+                plugin_tuple = ("plugin", self.plugin_key, "plugin_output", self.key)
+                df = _network_handler.dht_store_tuple(plugin_tuple)
+                return df
+
             # store a plugin_output row
             my_tuple = ("plugin_output", self.key, self.plugin_key, self.audio_key)
-            _network_handler.dht_store_tuple(my_tuple)
-
-            # make a plugin row for cross referencing
-            plugin_tuple = ("plugin", self.plugin_key, "plugin_output", self.key)
-            _network_handler.dht_store_tuple(plugin_tuple)
-
-            # make an audio_file row for cross referencing
-            audio_tuple = ("audio_file", self.audio_key, "plugin_output", self.key)
-            _network_handler.dht_store_tuple(audio_tuple)
+            df =_network_handler.dht_store_tuple(my_tuple)
+            # chain our tuple saving procedures, so they don't happen at the same time
+            df.addCallback(save_plugin_tuple)
+            df.addCallback(save_audio_tuple)
 
         # store the object state
         my_hash = {'vector': self.vector,
@@ -540,8 +562,9 @@ def save(obj):
     @param obj: the object to save
     @type  obj: Saveable
     """
-    print "saving object...", obj
-    obj.save()
+    print "->", "saving object...", obj
+    df = obj.save()
+    return df
 
 def update_vector(callback, plugin, audio_file):
     """ Create or Replace the current PluginOutput object for the
@@ -568,18 +591,34 @@ def apply_tag_to_file(audio_file, tag):
     tag_tuple = ("tag", tag.key, "audio_file", audio_file.key)
     audio_tuple = ("audio_file", audio_file.key, "tag", tag.key)
 
-    # beware. i'm not sure if the framework will actually detect duplicate tuples
-    # you might have to ensure uniqueness before publishing the tuples.
-    _network_handler.dht_store_tuple(tag_tuple)
-    _network_handler.dht_store_tuple(audio_tuple)
+    print "APPLYING TAG TO FILE:", tag
+
+    def save_tag_tuple(val):
+        tag_df = _network_handler.dht_store_tuple(tag_tuple)
+        return tag_df
+
+    def save_audio_tuple(val):
+        audio_df = _network_handler.dht_store_tuple(audio_tuple)
+        return audio_df
+
+    # chain our tuple saving procedures, so they don't happen at the same time
+    df = defer.Deferred()
+    df.addCallback(save_tag_tuple)
+    df.addCallback(save_audio_tuple)
+    df.callback(None)
+    return df
 
 
 def guess_tag_for_file(audio_file, tag):
     tag_tuple = ("tag", tag.key, "guessed_file", audio_file.key)
     audio_tuple = ("audio_file", audio_file.key, "guessed_tag", tag.key)
 
-    # beware. i'm not sure if the framework will actually detect duplicate tuples
-    # you might have to ensure uniqueness before publishing the tuples.
-    _network_handler.dht_store_tuple(tag_tuple)
-    _network_handler.dht_store_tuple(audio_tuple)
+    def save_tag_tuple(val):
+       df = _network_handler.dht_store_tuple(tag_tuple)
+       return df
+
+    # chain our tuple saving procedures, so they don't happen at the same time
+    df = _network_handler.dht_store_tuple(audio_tuple)
+    df.addCallback(save_tag_tuple)
+    return df
 
