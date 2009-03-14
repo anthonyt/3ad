@@ -155,8 +155,40 @@ class MyMenu(wx.Frame):
 
         self.Bind(wx.EVT_MENU, self.OnQuit, id=105)
 
-
     def AddFiles(self, event):
+        file_dlg = wx.FileDialog(self, "Choose a file", os.getcwd(), "", "", wx.OPEN | wx.MULTIPLE)
+
+        def file_added(file):
+            print "--->", "added", file, file.key.encode('hex')
+
+        def add_file(val, file_name, tags):
+            add_df = self.controller.add_file(file_added, file_name, tags)
+            return add_df
+
+        if file_dlg.ShowModal() == wx.ID_OK:
+            # get the list of selected files
+            files = file_dlg.GetPaths()
+
+            # get a list of tags for the files
+            txt_dlg = wx.TextEntryDialog(self, 'Enter tags for the selected files, separated by spaces', 'Tag files')
+            txt_dlg.SetValue("tags")
+            if txt_dlg.ShowModal() == wx.ID_OK:
+                tag_string = txt_dlg.GetValue()
+                tag_names = tag_string.split()
+            else:
+                tag_names = []
+            txt_dlg.Destroy()
+
+            # start the adding
+            df = defer.Deferred()
+            for file_name in files:
+                df.addCallback(add_file, file_name, tag_names)
+            df.callback(None)
+
+        file_dlg.Destroy()
+
+
+    def AddDemoFiles(self, event):
         file_data = [
             (u"audio/Cello note a.wav", [u"cello", u"strings", u"a"]),
             (u"audio/Cello note c.wav", [u"cello", u"strings", u"c"]),
