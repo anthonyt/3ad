@@ -28,54 +28,87 @@ class MyMenu(wx.Frame):
     def __init__(self, parent, id, title):
         wx.Frame.__init__(self, parent, id, title, wx.DefaultPosition, wx.Size(600, 450))
 
-        self.panels = {'demo_buttons': wx.Panel(self, -1, style=wx.SIMPLE_BORDER),
-                       'toolbar': wx.ToolBar(self, -1, style=wx.TB_HORIZONTAL | wx.RAISED_BORDER),
-                       'grid': wx.Panel(self, -1, style=wx.SUNKEN_BORDER),
-                       'list': wx.Panel(self, -1, style=wx.NO_BORDER) }
+        self.panels = {'buttons': wx.Panel(self, -1, style=wx.SIMPLE_BORDER),
+                       'list': wx.Panel(self, -1, style=wx.SIMPLE_BORDER) }
 
-        hbox = wx.BoxSizer(wx.HORIZONTAL)
-        for name in self.panels:
-            print "->", "setting up panel:", name
-            hbox.Add(self.panels[name], 1, wx.EXPAND | wx.ALL, 3)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        px_border = 3
+        sizer.Add(self.panels['buttons'], 0, wx.EXPAND | wx.ALL, px_border)
+        sizer.Add(self.panels['list'], 1, wx.EXPAND | wx.TOP | wx.RIGHT | wx.BOTTOM, px_border)
+        self.SetSizer(sizer)
 
         self._setupMenuBar()
-        self._setupToolBar(self.panels['toolbar'])
-        self._setupDemoButtons(self.panels['demo_buttons'])
-        self._setupGridAndMouse(self.panels['grid'])
+        self._setupButtons(self.panels['buttons'])
         self._setupList(self.panels['list'])
 
-        self.SetSizer(hbox)
 
         self.statusbar = self.CreateStatusBar()
         self.Centre()
 
-    def _setupGridAndMouse(self, panel):
-        box = wx.BoxSizer(wx.VERTICAL)
-        px_gap = 2
-        sizer = wx.GridSizer(3, 3, px_gap, px_gap)
 
-        cursors = [ wx.CURSOR_ARROW, wx.CURSOR_HAND, wx.CURSOR_WATCH, wx.CURSOR_SPRAYCAN, wx.CURSOR_PENCIL,
-                    wx.CURSOR_CROSS, wx.CURSOR_QUESTION_ARROW, wx.CURSOR_POINT_LEFT, wx.CURSOR_SIZING]
+    def _setupButtons(self, panel):
+        px_gap2 = 20
+        px_gap1 = 3
 
-        for i in cursors:
-            subpanel = wx.Panel(panel, -1, style=wx.SIMPLE_BORDER)
-            subpanel.SetCursor(wx.StockCursor(i))
-            sizer.Add(subpanel, flag=wx.EXPAND)
+        # setup add button and top spacer
+        btn_add = wx.Button(panel, 1, "Add Files to Library")
+        spacer = wx.StaticText(panel, -1, '')
 
-        box.Add(sizer, 1, wx.EXPAND | wx.TOP, 5)
-        panel.SetSizer(box)
+        # setup search elements
+        pnl_search = wx.Panel(panel, -1, style=wx.SIMPLE_BORDER)
+        lbl_search = wx.StaticText(pnl_search, -1, 'Search By Tag:')
+        txt_search = wx.wx.TextCtrl(pnl_search, -1)
+        btn_search = wx.Button(pnl_search, 2, "Search!")
 
+        # setup sizer for search elements
+        szr_search = wx.BoxSizer(wx.VERTICAL)
+        szr_search.Add(lbl_search, 0, wx.ALL, px_gap1)
+        szr_search.Add(txt_search, 0, wx.EXPAND | wx.ALL, px_gap1)
+        szr_search.Add(btn_search, 0, wx.EXPAND | wx.ALL, px_gap1)
+        pnl_search.SetSizer(szr_search)
 
-    def _setupDemoButtons(self, panel):
-        box = wx.BoxSizer(wx.VERTICAL)
-        box.Add(wx.Button(panel, 1, "Add Demo Files"), 1)
-        box.Add(wx.Button(panel, 2, "List All Files"), 1)
-        box.Add(wx.Button(panel, 3, "Add Tags for Files"), 1)
-        panel.SetSizer(box)
+        # setup tagging elements
+        pnl_tag = wx.Panel(panel, -1, style=wx.SIMPLE_BORDER)
+        lbl_tag = wx.StaticText(pnl_tag, -1, 'Tag Selected Files:')
+        txt_tag = wx.wx.TextCtrl(pnl_tag, -1)
+        btn_tag = wx.Button(pnl_tag, 3, "Tag!")
 
+        # setup sizer for tagging elements
+        szr_tag = wx.BoxSizer(wx.VERTICAL)
+        szr_tag.Add(lbl_tag, 0, wx.ALL, px_gap1)
+        szr_tag.Add(txt_tag, 0, wx.EXPAND | wx.ALL, px_gap1)
+        szr_tag.Add(btn_tag, 0, wx.EXPAND | wx.ALL, px_gap1)
+        pnl_tag.SetSizer(szr_tag)
+
+        # setup sizer for the main panel
+        sizer = wx.GridBagSizer(px_gap2, px_gap2)
+        sizer.Add(spacer, (0,0))
+        sizer.Add(btn_add, (1,0), flag=wx.ALIGN_CENTER_HORIZONTAL)
+        sizer.Add(pnl_search, (2,0), flag=wx.EXPAND)
+        sizer.Add(pnl_tag, (3, 0), flag=wx.EXPAND)
+        sizer.Add(wx.StaticText(self, -1, ''), (3, 0), flag=wx.EXPAND)
+        panel.SetSizer(sizer)
+
+        # add some event callbacks!
         self.Bind(wx.EVT_BUTTON, self.AddFiles, id=1)
         self.Bind(wx.EVT_BUTTON, self.ListFiles, id=2)
         self.Bind(wx.EVT_BUTTON, self.TagFiles, id=3)
+
+    def _setupList(self, panel):
+        px_gap = 0
+        sizer = wx.GridBagSizer(px_gap, px_gap)
+        self.lc = wx.ListCtrl(panel, -1, style=wx.LC_REPORT)
+        self.lc.InsertColumn(0, 'File Name')
+        self.lc.InsertColumn(1, 'Tags')
+        self.lc.InsertColumn(2, 'Vector')
+        #self.lc.SetColumnWidth(0, 140)
+        #self.lc.SetColumnWidth(1, 153)
+
+        sizer.Add(self.lc, (0, 0), flag=wx.EXPAND)
+        sizer.AddGrowableRow(0)
+        sizer.AddGrowableCol(0)
+        panel.SetSizer(sizer)
+
 
     def _setupMenuBar(self):
         menubar = wx.MenuBar()
@@ -108,43 +141,15 @@ class MyMenu(wx.Frame):
 
         self.Bind(wx.EVT_MENU, self.OnQuit, id=105)
 
-    def _setupList(self, panel):
-        box = wx.BoxSizer(wx.VERTICAL)
-        self.lc = wx.ListCtrl(self, -1, style=wx.LC_REPORT)
-        self.lc.InsertColumn(0, 'File Name')
-        self.lc.InsertColumn(1, 'Tags')
-        self.lc.InsertColumn(2, 'Vector')
-        #self.lc.SetColumnWidth(0, 140)
-        #self.lc.SetColumnWidth(1, 153)
-        box.Add(self.lc, 1, wx.EXPAND | wx.ALL, 3)
-        panel.SetSizer(box)
-
-
-    def _setupToolBar(self, toolbar):
-        box = wx.BoxSizer(wx.HORIZONTAL)
-        toolbar.AddSimpleTool(1, wx.Image('icons/search.png', wx.BITMAP_TYPE_PNG).ConvertToBitmap(), 'New', '')
-        toolbar.AddSimpleTool(2, wx.Image('icons/comment.png', wx.BITMAP_TYPE_PNG).ConvertToBitmap(), 'Open', '')
-        toolbar.AddSimpleTool(3, wx.Image('icons/removecomment.png', wx.BITMAP_TYPE_PNG).ConvertToBitmap(), 'Save', '')
-        toolbar.AddSeparator()
-        toolbar.AddSimpleTool(4, wx.Image('icons/webexport.png', wx.BITMAP_TYPE_PNG).ConvertToBitmap(), 'Exit', '')
-        toolbar.Realize()
-        box.Add(toolbar, 0, border=5)
-
-
-        self.Bind(wx.EVT_TOOL, self.OnNew, id=1)
-        self.Bind(wx.EVT_TOOL, self.OnOpen, id=2)
-        self.Bind(wx.EVT_TOOL, self.OnSave, id=3)
-        self.Bind(wx.EVT_TOOL, self.OnExit, id=4)
-
 
     def AddFiles(self, event):
         file_data = [
-#            ("audio/Cello note a.wav", ["cello", "strings"]),
-#            ("audio/Cello note c.wav", ["cello", "strings"]),
-#            ("audio/Cello note g.wav", ["cello", "strings"])
-            ("audio/Cello note a.wav", []),
-            ("audio/Cello note c.wav", []),
-            ("audio/Cello note g.wav", [])
+            ("audio/Cello note a.wav", ["cello", "strings"]),
+            ("audio/Cello note c.wav", ["cello", "strings"]),
+            ("audio/Cello note g.wav", ["cello", "strings"])
+#            ("audio/Cello note a.wav", []),
+#            ("audio/Cello note c.wav", []),
+#            ("audio/Cello note g.wav", [])
 #            (str(int(time.time())), [])
         ]
 
@@ -185,20 +190,6 @@ class MyMenu(wx.Frame):
 
     def TagFiles(self, event):
         pass
-
-    def OnNew(self, event):
-        self.statusbar.SetStatusText('New Command')
-        self.node.custom('key', 'value')
-
-    def OnOpen(self, event):
-        self.statusbar.SetStatusText('Open Command')
-
-    def OnSave(self, event):
-        self.statusbar.SetStatusText('Save Command')
-
-    def OnExit(self, event):
-        self.OnQuit(event)
-
 
     def OnQuit(self, event):
         self.Close()
