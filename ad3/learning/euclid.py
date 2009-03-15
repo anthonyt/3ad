@@ -1,4 +1,5 @@
 from numpy import mean, array, dot, sqrt, subtract
+from twisted.internet import defer
 
 # FIXME: this should be defined elsewhere
 def euclidean_distance(a, b):
@@ -25,12 +26,18 @@ class Euclidean(object):
 
 
     def calculate_file_vector(self, callback, file):
-        def got_outputs(pos):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
+
+        def got_outputs(plugin_outputs):
             vector = []
-            for po in pos:
+            for po in plugin_outputs:
                 vector.extend(po.vector)
-            callback(vector)
-        return self.model.get_plugin_outputs(got_outputs, audio_file=file)
+            outer_df.callback(vector)
+
+        self.model.get_plugin_outputs(got_outputs, audio_file=file)
+
+        return outer_df
 
 
     def does_tag_match(self, callback, file, tag):
