@@ -124,29 +124,28 @@ class Controller(object):
         # Update the vector for every tag, based on the new output
         def got_tags(tags):
             c = [0]
-            for tag in tags:
-                print "->", "Fetching vector for", tag
-
-                def got_vector(vector):
+            def got_vector(tag, vector):
+                tag.vector = vector
+                def save_tag(val):
                     print "->", "Saving vector for", tag
+                    s_df = self.model.save(tag)
+                    return s_df
 
-                    tag.vector = vector
-                    def save_tag(val):
-                        s_df = self.model.save(tag)
-                        return s_df
+                df.addCallback(save_tag)
 
-                    df.addCallback(save_tag)
+                c[0] += 1
+                # track the iteration. if this is the last one, trigger the outer_df
+                if c[0] == len(tags):
+                    df.addCallback(outer_df.callback)
 
-                    c[0] += 1
-                    # track the iteration. if this is the last one, trigger the outer_df
-                    if c[0] == len(tags):
-                        df.addCallback(outer_df.callback)
-
-                def get_vector(val):
-                    t_df = self.mine.calculate_tag_vector(got_vector, tag)
+            for tag in tags:
+                def get_vector(val, tag):
+                    print "->", "Fetching vector for", tag
+                    cb = partial(got_vector, tag)
+                    t_df = self.mine.calculate_tag_vector(cb, tag)
                     return t_df
+                df.addCallback(get_vector, tag)
 
-                df.addCallback(get_vector)
             df.callback(None)
 
         self.model.get_tags(got_tags, name=tag_name)
