@@ -225,10 +225,17 @@ class Controller(object):
                     save_df = self.model.save(file)
                     return save_df
 
+                def create_vectors(val):
+                    def lmk(val):
+                        print "LETTING YOU KNOW", val
+                    v_df = self.create_vectors(lmk, file)
+                    return v_df
+
                 def fire_outer_df(val):
                     outer_df.callback(file)
 
                 df.addCallback(save_file)
+                df.addCallback(create_vectors)
 
                 if len(tags) == 0:
                     df.addCallback(fire_outer_df)
