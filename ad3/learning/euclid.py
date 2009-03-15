@@ -18,11 +18,16 @@ class Euclidean(object):
 
 
     def calculate_tag_vector(self, callback, tag):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
+
         def got_files(files):
             vector = mean([f.vector for f in files], axis=0).tolist()
-            callback(vector)
+            outer_df.callback(vector)
 
-        return self.model.get_audio_files(got_files, tag = tag)
+        self.model.get_audio_files(got_files, tag = tag)
+
+        return outer_df
 
 
     def calculate_file_vector(self, callback, file):
