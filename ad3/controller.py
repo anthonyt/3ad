@@ -222,7 +222,6 @@ class Controller(object):
                         df.addCallback(guess_tag, file, tag)
 
             df.addCallback(outer_df.callback)
-            df.callback(None)
 
         def got_tags(tags):
             # take care of fetching the tag and audio file objects...
@@ -231,7 +230,16 @@ class Controller(object):
             else:
                 got_data(tags, [audio_file])
 
-        self.model.get_tags(got_tags)
+        def get_tags(val):
+            self.model.get_tags(got_tags)
+
+        def remove_old(val):
+            df = self.model.remove_guessed_tags()
+            return df
+
+        df.addCallback(remove_old)
+        df.addCallback(get_tags)
+        df.callback(None)
 
         return outer_df
 
