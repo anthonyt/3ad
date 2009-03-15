@@ -45,7 +45,7 @@ class Euclidean(object):
         return outer_df
 
 
-    def does_tag_match(self, callback, file, tag):
+    def does_tag_match(self, file, tag):
         if euclidean_distance(tag.vector, file.vector) <= self.tolerance:
             return True
         return False

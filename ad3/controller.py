@@ -206,23 +206,34 @@ class Controller(object):
 
 
     def guess_tags(self, callback, audio_file=None):
-        def got_data(files, tags):
+        df = defer.Deferred()
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
+
+        def guess_tag(val, file, tag):
+            df = self.model.guess_tag_for_file(file, tag)
+            return df
+
+        def got_data(tags, files):
             for file in files:
                 for tag in tags:
                     if self.mine.does_tag_match(file, tag):
-                        self.model.guess_tag_for_file(file, tag)
                         print "->", "GENERATED: ", file, tag
-            callback()
+                        df.addCallback(guess_tag, file, tag)
 
-        # take care of fetching the tag and audio file objects...
+            df.addCallback(outer_df.callback)
+            df.callback(None)
+
         def got_tags(tags):
+            # take care of fetching the tag and audio file objects...
             if audio_file is None:
-                def got_files(files):
-                    got_data(files, tags)
-                self.model.get_audio_files(got_files)
+                self.model.get_audio_files(partial(got_data, tags))
             else:
-                got_data([audio_file], tags)
+                got_data(tags, [audio_file])
+
         self.model.get_tags(got_tags)
+
+        return outer_df
 
 
     def add_file(self, callback, file_name, tags=[]):
