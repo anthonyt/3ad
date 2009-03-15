@@ -204,10 +204,10 @@ class MyMenu(wx.Frame):
         file_data = [
             (u"audio/Cello note a.wav", [u"cello", u"strings"]),
             (u"audio/Cello note c.wav", [u"cello", u"strings"]),
-            (u"audio/Cello note g.wav", [u"cello", u"strings"])
+            (u"audio/Cello note g.wav", [u"cello", u"strings"]),
             (u"audio/_05 Allemanda - Partita No. 6 in E minor.m4a.wav", [u"piano"]),
             (u"audio/_06 Sonata in A Major D664.wav", [u"piano"]),
-            (u"audio/_06 To Zanarkand.m4a.wav", u"piano"),
+            (u"audio/_06 To Zanarkand.m4a.wav", [u"piano"]),
             (u"audio/_07 Eyes On Me.m4a.wav", [u"piano"]),
             (u"audio/_09 Sonata in A Major D664.wav", [u"piano"]),
 #            ("audio/Cello note a.wav", []),
