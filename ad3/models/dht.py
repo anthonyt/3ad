@@ -681,6 +681,8 @@ def apply_tag_to_file(audio_file, tag):
 
 
 def guess_tag_for_file(audio_file, tag):
+    outer_df = defer.Deferred()
+
     tag_tuple = ("tag", tag.key, "guessed_file", audio_file.key)
     audio_tuple = ("audio_file", audio_file.key, "guessed_tag", tag.key)
 
@@ -688,8 +690,19 @@ def guess_tag_for_file(audio_file, tag):
        df = _network_handler.dht_store_tuple(tag_tuple)
        return df
 
+    def save_audio_tuple(val):
+        df = _network_handler.dht_store_tuple(audio_tuple)
+        return df
+
+    def done(val):
+        outer_df.callback(val)
+
     # chain our tuple saving procedures, so they don't happen at the same time
-    df = _network_handler.dht_store_tuple(audio_tuple)
+    df = defer.Deferred()
+    df.addCallback(save_audio_tuple)
     df.addCallback(save_tag_tuple)
-    return df
+    df.addCallback(done)
+    df.callback(None)
+
+    return outer_df
 
