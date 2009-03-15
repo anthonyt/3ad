@@ -454,7 +454,7 @@ def get_tag(callback, name):
     search_tuples = [("tag", None, name)]
     return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
-def get_plugin_outputs(callack, audio_file=None, plugin=None):
+def get_plugin_outputs(callback, audio_file=None, plugin=None):
     if audio_file is not None:
         audio_key = audio_file.key
     else:
@@ -581,7 +581,7 @@ def save(obj):
     df = obj.save()
     return df
 
-def update_vector(callback, plugin, audio_file):
+def update_vector(plugin, audio_file):
     """ Create or Replace the current PluginOutput object for the
     provided plugin/audio file pair. Saves the PluginObject to storage.
 
@@ -591,9 +591,10 @@ def update_vector(callback, plugin, audio_file):
     @param audio_file: the audio file to run the plugin on
     @type  audio_file: AudioFile
     """
-    vector = plugin.create_vector(audio_file.name)
+    vector = plugin.create_vector(str(audio_file.file_name))
     po = PluginOutput(vector, plugin.key, audio_file.key)
-    save(po)
+    df = save(po)
+    return df
 
 def initialize_storage(callback):
     """ Initializes an empty storage environment.
