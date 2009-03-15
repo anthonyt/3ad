@@ -89,6 +89,8 @@ class MyMenu(wx.Frame):
 
         # setup button for adding demo data
         btn_demo = wx.Button(panel, 4, "Add Demo Data")
+        btn_upd_tag = wx.Button(panel, 5, "Update Tag Vectors")
+        btn_upd_guess = wx.Button(panel, 6, "Guess Tags for Files")
 
         # setup sizer for the main panel
         sizer = wx.GridBagSizer(px_gap2, px_gap2)
@@ -97,6 +99,8 @@ class MyMenu(wx.Frame):
         sizer.Add(pnl_search, (2,0), flag=wx.EXPAND)
         sizer.Add(pnl_tag, (3, 0), flag=wx.EXPAND)
         sizer.Add(btn_demo, (4, 0), flag=wx.EXPAND)
+        sizer.Add(btn_upd_tag, (5, 0), flag=wx.EXPAND)
+        sizer.Add(btn_upd_guess, (6, 0), flag=wx.EXPAND)
         panel.SetSizer(sizer)
 
         # add some event callbacks!
@@ -104,6 +108,8 @@ class MyMenu(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.SearchFiles, id=2)
         self.Bind(wx.EVT_BUTTON, self.TagFiles, id=3)
         self.Bind(wx.EVT_BUTTON, self.AddDemoData, id=4)
+        self.Bind(wx.EVT_BUTTON, self.UpdateTagVectors, id=5)
+        self.Bind(wx.EVT_BUTTON, self.UpdateGuessedTags, id=6)
 
         # set some instance variables
         self.txt_search = txt_search
@@ -115,12 +121,14 @@ class MyMenu(wx.Frame):
         self.lc = wx.ListCtrl(panel, -1, style=wx.LC_REPORT)
         self.lc.InsertColumn(0, 'File Name')
         self.lc.InsertColumn(1, 'Tags')
-        self.lc.InsertColumn(2, 'File Path')
-        self.lc.InsertColumn(3, 'Vector')
+        self.lc.InsertColumn(2, 'Guessed Tags')
+        self.lc.InsertColumn(3, 'File Path')
+        self.lc.InsertColumn(4, 'Vector')
         self.lc.SetColumnWidth(0, 200)
-        self.lc.SetColumnWidth(1, 200)
-        self.lc.SetColumnWidth(2, 150)
+        self.lc.SetColumnWidth(1, 180)
+        self.lc.SetColumnWidth(2, 180)
         self.lc.SetColumnWidth(3, 150)
+        self.lc.SetColumnWidth(4, 150)
 
         sizer.Add(self.lc, (0, 0), flag=wx.EXPAND)
         sizer.AddGrowableRow(0)
@@ -194,9 +202,14 @@ class MyMenu(wx.Frame):
 
     def AddDemoData(self, event):
         file_data = [
-            (u"audio/Cello note a.wav", [u"cello", u"strings", u"a"]),
-            (u"audio/Cello note c.wav", [u"cello", u"strings", u"c"]),
-            (u"audio/Cello note g.wav", [u"cello", u"strings", u"g"])
+            (u"audio/Cello note a.wav", [u"cello", u"strings"]),
+            (u"audio/Cello note c.wav", [u"cello", u"strings"]),
+            (u"audio/Cello note g.wav", [u"cello", u"strings"])
+            (u"audio/_05 Allemanda - Partita No. 6 in E minor.m4a.wav", [u"piano"]),
+            (u"audio/_06 Sonata in A Major D664.wav", [u"piano"]),
+            (u"audio/_06 To Zanarkand.m4a.wav", u"piano"),
+            (u"audio/_07 Eyes On Me.m4a.wav", [u"piano"]),
+            (u"audio/_09 Sonata in A Major D664.wav", [u"piano"]),
 #            ("audio/Cello note a.wav", []),
 #            ("audio/Cello note c.wav", []),
 #            ("audio/Cello note g.wav", [])
@@ -205,8 +218,8 @@ class MyMenu(wx.Frame):
 
         plugins = [
             ('charlotte', 'ad3.analysis_plugins.charlotte'),
-            #('bextract', 'ad3.analysis_plugins.bextract_plugin'),
-            #('centroid', 'ad3.analysis_plugins.centroid_plugin')
+#            ('bextract', 'ad3.analysis_plugins.bextract_plugin'),
+#            ('centroid', 'ad3.analysis_plugins.centroid_plugin')
         ]
 
         df = defer.Deferred()
@@ -239,6 +252,16 @@ class MyMenu(wx.Frame):
         # start the callback chain
         df.callback('First val')
 
+    def UpdateTagVectors(self, event):
+        def updated(val):
+            print "->", "Tag Vectors Updated"
+        df = self.controller.update_tag_vectors(updated)
+
+    def UpdateGuessedTags(self, event):
+        def updated(val):
+            print "->", "Guessed Tags Updated"
+        df = self.controller.guess_tags(updated)
+
     def SearchFiles(self, event):
         def got_files(files):
             print "->", files
@@ -250,14 +273,19 @@ class MyMenu(wx.Frame):
                 num_items = self.lc.GetItemCount()
                 (dir, file_name) = os.path.split(file.file_name)
                 self.lc.InsertStringItem(num_items, file_name)
-                self.lc.SetStringItem(num_items, 2, dir)
-                self.lc.SetStringItem(num_items, 3, str(file.vector))
+                self.lc.SetStringItem(num_items, 3, dir)
+                self.lc.SetStringItem(num_items, 4, str(file.vector))
 
                 def got_tags(index, tags):
                     tagstring = ', '.join([tag.name for tag in tags])
                     self.lc.SetStringItem(index, 1, tagstring)
 
+                def got_guessed(index, tags):
+                    tagstring = ', '.join([tag.name for tag in tags])
+                    self.lc.SetStringItem(index, 2, tagstring)
+
                 self.model.get_tags(partial(got_tags, num_items), audio_file=file)
+                self.model.get_tags(partial(got_guessed, num_items), guessed_file=file)
 
             self.statusbar.SetStatusText('Got Files!')
 
