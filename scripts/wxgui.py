@@ -87,19 +87,23 @@ class MyMenu(wx.Frame):
         szr_tag.Add(btn_tag, 0, wx.EXPAND | wx.ALL, px_gap1)
         pnl_tag.SetSizer(szr_tag)
 
+        # setup button for adding demo data
+        btn_demo = wx.Button(panel, 4, "Add Demo Data")
+
         # setup sizer for the main panel
         sizer = wx.GridBagSizer(px_gap2, px_gap2)
         sizer.Add(spacer, (0,0))
         sizer.Add(btn_add, (1,0), flag=wx.ALIGN_CENTER_HORIZONTAL)
         sizer.Add(pnl_search, (2,0), flag=wx.EXPAND)
         sizer.Add(pnl_tag, (3, 0), flag=wx.EXPAND)
-        sizer.Add(wx.StaticText(self, -1, ''), (3, 0), flag=wx.EXPAND)
+        sizer.Add(btn_demo, (4, 0), flag=wx.EXPAND)
         panel.SetSizer(sizer)
 
         # add some event callbacks!
         self.Bind(wx.EVT_BUTTON, self.AddFiles, id=1)
         self.Bind(wx.EVT_BUTTON, self.SearchFiles, id=2)
         self.Bind(wx.EVT_BUTTON, self.TagFiles, id=3)
+        self.Bind(wx.EVT_BUTTON, self.AddDemoData, id=4)
 
         # set some instance variables
         self.txt_search = txt_search
@@ -188,7 +192,7 @@ class MyMenu(wx.Frame):
         file_dlg.Destroy()
 
 
-    def AddDemoFiles(self, event):
+    def AddDemoData(self, event):
         file_data = [
             (u"audio/Cello note a.wav", [u"cello", u"strings", u"a"]),
             (u"audio/Cello note c.wav", [u"cello", u"strings", u"c"]),
@@ -199,20 +203,40 @@ class MyMenu(wx.Frame):
 #            (str(int(time.time())), [])
         ]
 
+        plugins = [
+            ('charlotte', 'ad3.analysis_plugins.charlotte'),
+            #('bextract', 'ad3.analysis_plugins.bextract_plugin'),
+            #('centroid', 'ad3.analysis_plugins.centroid_plugin')
+        ]
+
         df = defer.Deferred()
 
         def file_added(file):
             print "--->", "added", file, file.key.encode('hex')
             return "file_added"
 
+        def plugin_added(plugin):
+            print "--->", "added", plugin, plugin.key.encode('hex')
+            return "plugin_added"
+
         def add_file(val, file_name, tags):
-#            return self.controller.add_file(file_added, "/Users/anthony/Documents/school/csc466/3ad/"+file_name, tags)
+            file_name = u"/Users/anthony/Documents/school/csc466/3ad/"+file_name
             add_df = self.controller.add_file(file_added, file_name, tags)
             return add_df
 
+        def add_plugin(val, name, module_name):
+            p_df = self.controller.add_plugin(plugin_added, name, module_name)
+            return p_df
+
+        # add callbacks for adding plugins
+        for (name, module_name) in plugins:
+            df.addCallback(add_plugin, name, module_name)
+
+        # add callbacks for adding files
         for (file_name, tags) in file_data:
             df.addCallback(add_file, file_name, tags)
 
+        # start the callback chain
         df.callback('First val')
 
     def SearchFiles(self, event):
