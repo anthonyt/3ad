@@ -139,39 +139,56 @@ class Controller(object):
         self.model.get_tags(got_tags, name=tag_name)
 
 
-    def create_vectors(self, callback, file_name=None, plugin_name=None):
-        def got_data(files, plugins):
+    def create_vectors(self, callback, file, plugin_name=None):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
+
+        df = defer.Deferred()
+        #    get_plugins
+        # -> got_plugins
+        # -> update_plugin_vector (for each plugin)
+        # -> update_file_vector
+        # -> got_file_vector
+        # -> save_file
+        # -> outer_df.callback
+
+        def update_plugin_vector(val, plugin):
+            u_df = self.model.update_vector(plugin, file)
+            return u_df
+
+        def got_file_vector(vector):
+            def save_file(val):
+                file.vector = vector
+                print "->", "Updating vector for", file
+                s_df = self.model.save(file)
+                return s_df
+
+            # after we finish saving the file, trigger the outer_df callback
+            df.addCallback(save_file)
+            df.addCallback(outer_df.callback)
+
+        def update_file_vector(val):
+            m_df = self.mine.calculate_file_vector(got_file_vector, file)
+            return m_df
+
+
+        def got_plugins(plugins):
             for plugin in plugins:
-                for file in files:
-                    # FIXME: this will soon have to be asynchronous.
-                    print "->", "Creating vector for", file, plugin
-                    self.model.update_vector(plugin, file)
+                print "->", "Creating vector for", file, plugin
+                df.addCallback(update_plugin_vector, plugin)
 
-            num_files = len(files)
-            num_vectors = 0
+            df.addCallback(update_file_vector)
 
-            for file in files:
-                def got_file_vector(vector):
-                    file.vector = vector
-                    self.model.save(file)
-                    print "->", "Updating vector for", file
 
-                    # ensure that the callback function is called only on the
-                    # saving of the final file vector
-                    num_vectors += 1
-                    if num_vectors == num_files:
-                        print "->", "Updated %d plugins for %d files" % (len(plugins), len(files))
-                        callback()
+        def get_plugins(val):
+            # take care of fetching the plugin objects...
+            self.model.get_plugins(got_plugins, name=plugin_name)
 
-                self.mine.calculate_file_vector(got_file_vector, file)
+        df.addCallback(get_plugins)
+        df.callback(None)
 
-        # take care of fetching the plugin and file objects...
-        def got_files(files):
-            def got_plugins(plugins):
-                got_data(files, plugins)
-            plugins = self.model.get_plugins(got_plugins, name=plugin_name)
+        return outer_df
 
-        self.model.get_audio_files(got_files, file_name=file_name)
 
 
     def guess_tags(self, callback, audio_file=None):
