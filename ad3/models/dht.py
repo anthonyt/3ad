@@ -1,9 +1,19 @@
 import ad3.models.abstract
 import simplejson
 import hashlib
+import urllib
+import tempfile
+import random
+import os
+import entangled
+import entangled.dtuple
+import entangled.kademlia.contact
+import entangled.kademlia.msgtypes
+from entangled.kademlia.node import rpcmethod
 from time import time
 from sets import Set
 from twisted.internet import defer
+from twisted.internet import reactor
 
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
@@ -62,7 +72,7 @@ class ObjectAggregator(object):
 
         # for each key, run our got_value function on the value row
         for key in self.key_list:
-#            print "->", "Searching for key..", key.encode('hex')
+#            #print "->", "Searching for key..", key.encode('hex')
             o = self.net_handler.cache_get_obj(key)
             if o is not None:
                 self.objects.append(o)
@@ -80,7 +90,7 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        print "->", "OBJ FROM ROW", row
+        #print "->", "OBJ FROM ROW", row
         h = simplejson.loads(row)
 
         if h['type'] == "plugin":
@@ -105,7 +115,7 @@ class NetworkHandler(object):
 
 
     def hash_function(self, plain_key):
-        print "->", "Generating a hash for", plain_key
+        #print "->", "Generating a hash for", plain_key
         h = hashlib.sha1()
         h.update(plain_key)
         return h.digest()
@@ -134,9 +144,10 @@ class NetworkHandler(object):
 
     def dht_store_value(self, key, value):
         def success(result):
-            print "->", 'stored value:', result
+            #print "->", 'stored value:', result
+            return result
 
-        print "->", "Attempting to store value", key.encode('hex'), "=>", value
+        #print "->", "Attempting to store value", key.encode('hex'), "=>", value
         df = self.node.iterativeStore(key, value)
         df.addCallback(success)
         return df
@@ -153,7 +164,7 @@ class NetworkHandler(object):
             print "->", 'an error occurred:', failure.getErrorMessage()
             callback(None)
 
-#        print "->", "searching for tuples based on", dTuple
+#        #print "->", "searching for tuples based on", dTuple
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -182,13 +193,13 @@ class NetworkHandler(object):
 
     def dht_store_tuple(self, dTuple):
         def success(result):
-            print "->", 'stored tuple:', result
-            return "dht_store_tuple"
+            #print "->", 'stored tuple:', result
+            return result
 
         def error(failure):
             print "->", 'an error occurred:', failure.getErrorMessage()
 
-        print "->", "Attempting to store tuple:", dTuple
+        #print "->", "Attempting to store tuple:", dTuple
         df = self.node.put(dTuple, trackUsage=False)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -204,16 +215,16 @@ class NetworkHandler(object):
         """
         def got_keys(keys):
             if len(keys) == 0:
-                print "->", "KA object found nothing."
+                #print "->", "KA object found nothing."
                 callback([])
             else:
                 # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
-                print "->", "KA object found", len(keys), "keys. Making a OA object with key list."
+                #print "->", "KA object found", len(keys), "keys. Making a OA object with key list."
                 ta = ObjectAggregator(self, keys)
                 ta.go(callback)
 
-        print "->", "Making a KA object with tuple list:", tuple_list
+        #print "->", "Making a KA object with tuple list:", tuple_list
         ka = KeyAggregator(self, tuple_list)
         ka.go(got_keys)
 
@@ -242,7 +253,7 @@ class NetworkHandler(object):
         if key in self._cache:
             entry = self._cache[key]
             if int(time()) < entry[0]:
-                print "-> Fetching item from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
+                #print "-> Fetching item from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
                 return entry[1]
 
         return None
@@ -263,7 +274,7 @@ def set_network_handler(obj):
     should be an instance of the network handler class above
     will be used by all functions below
     """
-    print "->", "setting network handler!", obj
+    #print "->", "setting network handler!", obj
     global _network_handler
     _network_handler = obj
 
@@ -653,7 +664,7 @@ def save(obj):
     @param obj: the object to save
     @type  obj: Saveable
     """
-    print "->", "saving object...", obj
+    #print "->", "saving object...", obj
     df = obj.save()
     return df
 
@@ -667,10 +678,53 @@ def update_vector(plugin, audio_file):
     @param audio_file: the audio file to run the plugin on
     @type  audio_file: AudioFile
     """
-    vector = plugin.create_vector(str(audio_file.file_name))
-    po = PluginOutput(vector, plugin.key, audio_file.key)
-    df = save(po)
-    return df
+    outer_df = defer.Deferred()
+    def done(val):
+        print "TRIGGERING OUTER_DF", val
+        outer_df.callback(val)
+
+    def calculate_vector_yourself(val):
+        vector = plugin.create_vector(str(audio_file.file_name))
+        po = PluginOutput(vector, plugin.key, audio_file.key)
+        df = save(po)
+        df.addCallback(done)
+        return df
+
+    def error(failure):
+        print "Error getting vector from contact", failure.getErrorMessage()
+        calculate_vector_yourself(None)
+
+    def got_poll(val):
+#        timeoutCall = reactor.callLater(5, poll)
+        pass
+
+    def poll():
+        pass
+
+
+    def request_accepted(val):
+        print "REQUEST ACCEPTED!! by", val
+        # start the polling loop here.
+#        timeoutCall = reactor.callLater(5, poll)
+        df = calculate_vector_yourself(val)
+        return df
+
+    def farm_out_vector_calculation():
+        print "Attempting to farm out vector calculation"
+
+        hash = {'module_name': plugin.module_name, 'file_uri': 'http://127.0.0.1/audio' + audio_file.file_name}
+        json = simplejson.dumps(hash)
+        df = _network_handler.node.sendOffloadCommand(audio_file.key, json)
+        return df
+
+    df = farm_out_vector_calculation()
+
+    # best case scenario, farming out the calculation works
+    df.addCallback(request_accepted)
+    # if farming out calculation fails (eg. times out)
+    df.addErrback(error)
+
+    return outer_df
 
 def initialize_storage(callback):
     """ Initializes an empty storage environment.
@@ -683,7 +737,7 @@ def apply_tag_to_file(audio_file, tag):
     tag_tuple = ("tag", tag.key, "audio_file", audio_file.key)
     audio_tuple = ("audio_file", audio_file.key, "tag", tag.key)
 
-    print "APPLYING TAG TO FILE:", tag
+    #print "APPLYING TAG TO FILE:", tag
 
     def save_tag_tuple(val):
         tag_df = _network_handler.dht_store_tuple(tag_tuple)
@@ -752,3 +806,82 @@ def guess_tag_for_file(audio_file, tag):
 
     return outer_df
 
+class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
+    def sendOffloadCommand(self, key, value):
+        def executeRPC(nodes):
+            contact = random.choice(nodes)
+            originalPublisherID = self.id
+            age = 0
+
+            print "SENDING RPC TO:", contact
+            df = contact.offload(key, value, originalPublisherID, age)
+            return df
+
+        # Find k nodes closest to the key...
+        df = self.iterativeFindNode(key)
+        df.addCallback(executeRPC)
+
+        return df
+
+    def pollOffloadedCalculation(self, key, value, contact):
+        originalPublisherID = self.id
+        age = 0
+        df = contact.poll(key, value, originalPublisherID, age)
+        return df
+
+    @rpcmethod
+    def offload(self, key, value, originalPublisherID=None, age=0, **kwargs):
+        hash = simplejson.loads(value)
+        plugin_module = hash['module_name']
+        file_uri = hash['file_uri']
+        id = plugin_module + file_uri
+
+        if not hasattr(self, 'computations'):
+            self.computations = {}
+        self.computations[plugin_module+file_uri] = {'complete': False, 'vector': None, 'failed': False}
+
+        def do_computation(val):
+            plugin = Plugin('temp', plugin_module)
+            print "Downloading", file_uri
+            print urllib.quote(file_uri)
+            (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
+            print "Computing vector"
+            vector = plugin.create_vector(file_name)
+            self.computations[id]['complete'] = True
+            self.computations[id]['vector'] = vector
+            os.remove(file_name)
+            return None
+
+        def computation_error(failure):
+            print "Computation error :(", failure.getErrorMessage()
+            self.computations[id]['complete'] = True
+            self.computations[id]['failed'] = True
+
+        df = defer.Deferred()
+        df.addCallback(do_computation)
+        df.addErrback(computation_error)
+        df.callback(None)
+
+        #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
+        #file.write(value)
+        print "RECEIVED AN OFFLOAD RPC!", file_uri, plugin_module
+        return "OK"
+
+    @rpcmethod
+    def poll(self, key, value, originalPublisherID=None, age=0, **kwargs):
+        hash = simplejson.loads(value)
+        plugin_module = hash['module_name']
+        file_uri = hash['file_uri']
+        id = plugin_module + file_uri
+
+        if not hasattr(self, 'computations') or not self.computations.has_key(id):
+            # we've never heard of the requested offload operation. make something up!
+            result = {'complete': True, 'vector': None, 'failed': True}
+        elif self.computations[id]['complete']:
+            # we've finished the requested offload operation. remove if from the list and return it
+            result = self.computations.pop(id)
+        else:
+            # we haven't finished the requested offload operation, but we have some data on it
+            result = self.computations[id]
+
+        return simplejson.dumps(result)

@@ -75,7 +75,7 @@ class FileAggregator(object):
             files = None
             for tag_name in self.file_lists:
                 if files is None:
-                    print self.file_lists[tag_name]
+                    #print self.file_lists[tag_name]
                     files = Set(self.file_lists[tag_name])
                 else:
                     files = files.intersection(self.file_lists[tag_name])
@@ -127,7 +127,7 @@ class Controller(object):
             def got_vector(tag, vector):
                 tag.vector = vector
                 def save_tag(val):
-                    print "->", "Saving vector for", tag
+                    #print "->", "Saving vector for", tag
                     s_df = self.model.save(tag)
                     return s_df
 
@@ -140,7 +140,7 @@ class Controller(object):
 
             for tag in tags:
                 def get_vector(val, tag):
-                    print "->", "Fetching vector for", tag
+                    #print "->", "Fetching vector for", tag
                     cb = partial(got_vector, tag)
                     t_df = self.mine.calculate_tag_vector(cb, tag)
                     return t_df
@@ -188,7 +188,7 @@ class Controller(object):
 
         def got_plugins(plugins):
             for plugin in plugins:
-                print "->", "Creating vector for", file, plugin
+                #print "->", "Creating vector for", file, plugin
                 df.addCallback(update_plugin_vector, plugin)
 
             df.addCallback(update_file_vector)
@@ -218,7 +218,7 @@ class Controller(object):
             for file in files:
                 for tag in tags:
                     if self.mine.does_tag_match(file, tag):
-                        print "->", "GENERATED: ", file, tag
+                        #print "->", "GENERATED: ", file, tag
                         df.addCallback(guess_tag, file, tag)
 
             df.addCallback(outer_df.callback)
@@ -250,7 +250,7 @@ class Controller(object):
         outer_df.addCallback(callback)
 
         def got_file(file):
-            print "\n"
+            #print "\n"
             if file is None:
                 file = AudioFile(file_name)
 
@@ -260,7 +260,7 @@ class Controller(object):
 
                 def create_vectors(val):
                     def lmk(val):
-                        print "LETTING YOU KNOW", val
+                        print "LETTING YOU KNOW THAT VECTORS HAVE BEEN CREATED", val
                     v_df = self.create_vectors(lmk, file)
                     return v_df
 
@@ -275,7 +275,7 @@ class Controller(object):
                 else:
                     def got_tags(tags):
                         def apply(value, file, tag):
-                            print "Attempting to apply:", tag
+                            #print "Attempting to apply:", tag
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
@@ -298,7 +298,7 @@ class Controller(object):
                 outer_df.callback(None)
 
 
-        print "\n"
+        #print "\n"
         self.model.get_audio_file(got_file, file_name=file_name)
         return outer_df
 

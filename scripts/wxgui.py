@@ -6,10 +6,6 @@ import time
 from twisted.internet import wxreactor; wxreactor.install()
 from twisted.internet import reactor
 from twisted.internet import defer
-import entangled.dtuple
-import entangled.kademlia.contact
-import entangled.kademlia.msgtypes
-from entangled.kademlia.node import rpcmethod
 import hashlib
 import cPickle
 from functools import partial
@@ -325,10 +321,12 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, 'My Demo Program!')
         frame.Show(True)
 
-        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
-        udpPort = 5000
+        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5002)]
+        udpPort = 5001
+#        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
+#        udpPort = 5000
 
-        self.node = MyNode(udpPort=udpPort)
+        self.node = ad3.models.dht.MyNode(udpPort=udpPort)
         print "->", "joining network..."
         self.node.joinNetwork(knownNodes)
         print "->", "joined network..."
@@ -341,27 +339,6 @@ class MyApp(wx.App):
         frame.model = model
 
         return True
-
-class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
-    def sendCustomCommand(self, key, value, originalPublisherID=None, age=0):
-        if originalPublisherID == None:
-            originalPublisherID = self.id
-        # Prepare a callback for doing "STORE" RPC calls
-        def executeCustomRPCs(nodes):
-            #print '        .....execStoreRPCs called'
-            for contact in nodes:
-                contact.custom(key, value, originalPublisherID, age)
-            return nodes
-        # Find k nodes closest to the key...
-        df = self.iterativeFindNode(key)
-        # ...and send them STORE RPCs as soon as they've been found
-        df.addCallback(executeCustomRPCs)
-        return df
-
-    @rpcmethod
-    def custom(self, key, value, originalPublisherID=None, age=0, **kwargs):
-        print "RECEIVED A CUSTOM RPC!"
-        return "OK"
 
 
 import sys

@@ -27,7 +27,7 @@ def createVector(filename):
     #------------------- Set Parameters ------------------------------
 
     # Set the texture memory size to a 1-second window (22 analysis frames)
-    fnet.updControl("TextureStats/tStats/mrs_natural/memSize", MarControlPtr.from_natural(22))
+    fnet.updControl("TextureStats/tStats/mrs_natural/memSize", MarControlPtr.from_natural(66))
 
     # Set the file name
     fnet.updControl("SoundFileSource/src/mrs_string/filename", MarControlPtr.from_string(filename))
