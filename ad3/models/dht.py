@@ -387,13 +387,13 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         if self.key is None:
             self.key = self.__get_key()
 
-            def save_audio_tuple():
+            def save_audio_tuple(val):
                 # make an audio_file row for cross referencing
                 audio_tuple = ("audio_file", self.audio_key, "plugin_output", self.key)
                 df = _network_handler.dht_store_tuple(audio_tuple)
                 return df
 
-            def save_plugin_tuple():
+            def save_plugin_tuple(val):
                 # make a plugin row for cross referencing
                 plugin_tuple = ("plugin", self.plugin_key, "plugin_output", self.key)
                 df = _network_handler.dht_store_tuple(plugin_tuple)
@@ -405,15 +405,18 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
             # chain our tuple saving procedures, so they don't happen at the same time
             df.addCallback(save_plugin_tuple)
             df.addCallback(save_audio_tuple)
+        else:
+            df = None
 
         # store the object state
         my_hash = {'vector': self.vector,
                    'key': self.key.encode('hex'),
-                   'plugin_key': self.plugin_key,
-                   'audio_key': self.audio_key,
+                   'plugin_key': self.plugin_key.encode('hex'),
+                   'audio_key': self.audio_key.encode('hex'),
                    'type': 'plugin_output'}
         my_string = simplejson.dumps(my_hash)
         _network_handler.dht_store_value(self.key, my_string)
+        return df
 
 
 
