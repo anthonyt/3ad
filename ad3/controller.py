@@ -116,11 +116,14 @@ class Controller(object):
         self.model.initialize_storage(callback)
 
     def update_tag_vectors(self, callback, tag_name = None):
+        outer_df = defer.Deferred()
+        outer_df.addCallback(callback)
+
+        df = defer.Deferred()
+
         # Update the vector for every tag, based on the new output
         def got_tags(tags):
-            num_tags = len(tags)
-            num_calculated = 0
-
+            c = [0]
             for tag in tags:
                 print "->", "Fetching vector for", tag
 
@@ -128,15 +131,27 @@ class Controller(object):
                     print "->", "Saving vector for", tag
 
                     tag.vector = vector
-                    self.model.save(tag)
+                    def save_tag(val):
+                        s_df = self.model.save(tag)
+                        return s_df
 
-                    num_calculated += 1
-                    if num_calculated == num_tags:
-                        callback()
+                    df.addCallback(save_tag)
 
-                self.mine.calculate_tag_vector(got_vector, tag)
+                    c[0] += 1
+                    # track the iteration. if this is the last one, trigger the outer_df
+                    if c[0] == len(tags):
+                        df.addCallback(outer_df.callback)
+
+                def get_vector(val):
+                    t_df = self.mine.calculate_tag_vector(got_vector, tag)
+                    return t_df
+
+                df.addCallback(get_vector)
+            df.callback(None)
 
         self.model.get_tags(got_tags, name=tag_name)
+
+        return outer_df
 
 
     def create_vectors(self, callback, file, plugin_name=None):
