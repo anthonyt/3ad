@@ -159,6 +159,27 @@ class NetworkHandler(object):
 #        df.addErrback(error)
         return df
 
+    def dht_remove_tuples(self, dTuple):
+        df = defer.Deferred()
+        outer_df = defer.Deferred()
+
+        def done(result):
+            outer_df.callback(result)
+
+        def get_next_tuple(result):
+            if result is not None:
+                df.addCallback(get_next_tuple)
+                df_g = self.node.getIfExists(dTuple)
+                return df_g
+            else:
+                df.addCallback(done)
+                return None
+
+        df.addCallback(get_next_tuple)
+        df.callback('go')
+
+        return outer_df
+
     def dht_store_tuple(self, dTuple):
         def success(result):
             print "->", 'stored tuple:', result
@@ -678,6 +699,31 @@ def apply_tag_to_file(audio_file, tag):
     df.addCallback(save_audio_tuple)
     df.callback(None)
     return df
+
+def remove_guessed_tags():
+    outer_df = defer.Deferred()
+
+    def done(val):
+        outer_df.callback(val)
+
+    def remove_tag_tuples(val):
+        tag_tuple = ("tag", None, "guessed_file", None)
+        df = _network_handler.dht_remove_tuples(tag_tuple)
+        return df
+
+    def remove_audio_tuples(val):
+        audio_tuple = ("audio_file", None, "guessed_tag", None)
+        df = _network_handler.dht_remove_tuples(audio_tuple)
+        return df
+
+    df = defer.Deferred()
+    df.addCallback(remove_tag_tuples)
+    df.addCallback(remove_audio_tuples)
+    df.addCallback(done)
+    df.callback(None)
+
+    return outer_df
+
 
 
 def guess_tag_for_file(audio_file, tag):
