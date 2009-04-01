@@ -1,10 +1,10 @@
 from marsyas import *
 from numpy import array
 
-mng = MarSystemManager()
-fnet = mng.create("Series", "fnet")
-
 def createVector(filename):
+    mng = MarSystemManager()
+    fnet = mng.create("Series", "fnet")
+
     #------------------ Feature Network ------------------------------
 
     # Decode the file, downmix to mono, and downsample
@@ -26,7 +26,7 @@ def createVector(filename):
 
     #------------------- Set Parameters ------------------------------
 
-    # Set the texture memory size to a 1-second window (22 analysis frames)
+    # Set the texture memory size to a 3-second window (66 analysis frames)
     fnet.updControl("TextureStats/tStats/mrs_natural/memSize", MarControlPtr.from_natural(66))
 
     # Set the file name
@@ -74,8 +74,8 @@ def createVector(filename):
 
     # ----------------- Top Level Network Wrapper -------------------
 
-    # (src.downmix.downsample.features.texture stats)
-    # --.accumulator.song stats.output
+    # (src->downmix->downsample->features->texture stats)
+    # -->accumulator->song stats->output
     tnet = mng.create("Series", "tnet")
     acc.addMarSystem(fnet)
     tnet.addMarSystem(acc)
@@ -95,3 +95,7 @@ def createVector(filename):
 
     return result.tolist()
 
+
+    """
+    feature extractor (get a vector) -> annotator (append the number for the class of the output, like, the tag id) --> classifier (train mode) (output actual tag_id, guessed tag_id, as a tuple)
+    """

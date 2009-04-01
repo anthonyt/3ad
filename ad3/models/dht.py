@@ -717,12 +717,15 @@ def update_vector(plugin, audio_file):
         df = _network_handler.node.sendOffloadCommand(audio_file.key, json)
         return df
 
-    df = farm_out_vector_calculation()
+#    df = farm_out_vector_calculation()
+    df = defer.Deferred()
 
     # best case scenario, farming out the calculation works
     df.addCallback(request_accepted)
     # if farming out calculation fails (eg. times out)
     df.addErrback(error)
+
+    df.callback(None)
 
     return outer_df
 

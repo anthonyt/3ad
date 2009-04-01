@@ -5,11 +5,9 @@
 import marsyas
 from numpy import array
 
-# Create top-level patch
-mng = marsyas.MarSystemManager()
 
 def createVector(filename):
-
+    mng = marsyas.MarSystemManager()
     fnet = mng.create("Series", "featureNetwork")
 
     # Add the MarSystems
