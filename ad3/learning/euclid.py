@@ -3,7 +3,6 @@ from twisted.internet import defer
 from marsyas import *
 from sys import exit
 
-# FIXME: this should be defined elsewhere
 def euclidean_distance(a, b):
     """
     takes two numpy arrays, a, b, both of length n
@@ -84,57 +83,6 @@ def to_array(vec):
             arr[i][j] = vec[j*rows + i]
     return (arr.tolist(), cols)
 
-def system_to_dict(msys, enabled_children):
-    controls = msys.getControls().keys()
-    prefix = msys.getPrefix()
-    control_list = []
-    for key in controls:
-        val = msys.getControl(key)
-        type = val.getType()
-
-        # strip the information from higher up the tree
-#        off = key.find(prefix)
-#        key = key[off:]
-
-        if type == 'mrs_natural':
-            val = val.to_natural()
-        elif type == 'mrs_string':
-            val = val.to_string()
-        elif type == 'mrs_real':
-            val = val.to_real()
-        elif type == 'mrs_bool':
-            val = val.to_bool()
-        elif type == 'mrs_realvec':
-            val = to_array(val.to_realvec())
-
-        if key.find('/enableChild') < 0:
-            control_list.append((key, val))
-
-    out = {'name': msys.getName(), 'type': msys.getType(), 'controls': control_list, 'children':enabled_children}
-    return out
-
-def dict_to_system(d, msys):
-#    msys = mng.create(d['type'], d['name'])
-
-    for (key, val) in d['children']:
-        msys.updControl(key, fstr(val))
-
-    for (key, val) in d['controls']:
-        if key.find('mrs_natural') >= 0:
-            ctrl = fnat(val)
-        elif key.find('mrs_string') >= 0:
-            ctrl = fstr(val)
-        elif key.find('mrs_realvec') >= 0:
-            ctrl = frvec(to_realvec(val[0], val[1]))
-        elif key.find('mrs_real') >= 0:
-            ctrl = freal(val)
-        elif key.find('mrs_bool') >= 0:
-            ctrl = fbool(val)
-        msys.updControl(key, ctrl)
-
-#    return msys
-
-
 def test():
     # create an array of realvecs to classify
     data = [
@@ -158,7 +106,6 @@ def test():
 
 
 def train(data, num_classes, class_names):
-    print "TRAINING"
     net = mng.create("Series", "net")
 
     # Start setting up our MarSystems
@@ -185,20 +132,16 @@ def train(data, num_classes, class_names):
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
 
-    print "DONE TRAINING"
-    d = system_to_dict(cl, classifier_children)
-    print cl.toString()
-    return d
+    return cl.toString()
 
 
-def predict(data, num_classes, class_names, classifier_dict):
-    print "PREDICTING"
+def predict(data, num_classes, class_names, classifier_string):
     # create up our series system
     net = mng.create("Series", "net")
 
     # Start setting up our MarSystems
     rv = mng.create("RealvecSource", "rv")
-    cl = mng.create("Classifier", "cl")
+    cl = mng.getMarSystem(classifier_string)
     summary = mng.create("Summary", "summary")
 
     # set up the series
@@ -206,16 +149,6 @@ def predict(data, num_classes, class_names, classifier_dict):
     net.addMarSystem(cl)
     net.addMarSystem(summary)
 
-    dict_to_system(classifier_dict, cl)
-
-    print cl.toString()
-
-    # read in the classifier settings
-#    cl.load(classifier_string)
-#    print cl.getControls()
-#    print "DONE READING"
-
-    print "DONE ADDING SYSTEMS"
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
     net.updControl("mrs_natural/inSamples", fnat(1))
@@ -225,7 +158,6 @@ def predict(data, num_classes, class_names, classifier_dict):
     net.updControl("Summary/summary/mrs_natural/nClasses", fnat(num_classes))
     net.linkControl("Classifier/cl/mrs_string/mode", "Summary/summary/mrs_string/mode")
 
-    print "SETTING UP DATA SOURCES"
     # Set a "new" data source
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
     net.updControl("RealvecSource/rv/mrs_bool/done", fbool(False))
@@ -233,9 +165,7 @@ def predict(data, num_classes, class_names, classifier_dict):
     # Loop over all the input, ticking the system, and classifying it
     net.updControl("Classifier/cl/mrs_string/mode", fstr("predict"))
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
-        print "TICKING"
         net.tick()
-        print "TICKED"
         o = net.getControl("Classifier/cl/mrs_realvec/processedData").to_realvec()
         print array(o)
 
