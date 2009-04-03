@@ -67,9 +67,8 @@ classifier_ = "SVM"
 wekafname_ = "input.arff"
 mng = MarSystemManager()
 
-def to_realvec(matrix):
+def to_realvec(matrix, cols):
     rows = len(matrix)
-    cols = len(matrix[0])
     vec = realvec(rows, cols)
     for i in range(0, rows):
         for j in range(0, cols):
@@ -83,24 +82,60 @@ def to_array(vec):
     for i in range(0, rows):
         for j in range(0, cols):
             arr[i][j] = vec[j*rows + i]
-    return arr
+    return (arr.tolist(), cols)
 
-def train():
-    net = mng.create("Series", "net")
+def system_to_dict(msys, enabled_children):
+    controls = msys.getControls().keys()
+    prefix = msys.getPrefix()
+    control_list = []
+    for key in controls:
+        val = msys.getControl(key)
+        type = val.getType()
 
-    # Start setting up our MarSystems
-    net.addMarSystem(mng.create("RealvecSource", "rv"))
-    net.addMarSystem(mng.create("Classifier", "cl"))
-    net.addMarSystem(mng.create("Summary", "summary"))
+        # strip the information from higher up the tree
+#        off = key.find(prefix)
+#        key = key[off:]
 
-    # Set up the appropriate classifier
-    if classifier_ == "GS":
-        net.updControl("Classifier/cl/mrs_string/enableChild", fstr("GaussianClassifier/gaussiancl"))
-    elif classifier_ == "ZEROR":
-        net.updControl("Classifier/cl/mrs_string/enableChild", fstr("ZeroRClassifier/zerorcl"))
-    elif classifier_ == "SVM":
-        net.updControl("Classifier/cl/mrs_string/enableChild", fstr("SVMClassifier/svmcl"))
+        if type == 'mrs_natural':
+            val = val.to_natural()
+        elif type == 'mrs_string':
+            val = val.to_string()
+        elif type == 'mrs_real':
+            val = val.to_real()
+        elif type == 'mrs_bool':
+            val = val.to_bool()
+        elif type == 'mrs_realvec':
+            val = to_array(val.to_realvec())
 
+        if key.find('/enableChild') < 0:
+            control_list.append((key, val))
+
+    out = {'name': msys.getName(), 'type': msys.getType(), 'controls': control_list, 'children':enabled_children}
+    return out
+
+def dict_to_system(d, msys):
+#    msys = mng.create(d['type'], d['name'])
+
+    for (key, val) in d['children']:
+        msys.updControl(key, fstr(val))
+
+    for (key, val) in d['controls']:
+        if key.find('mrs_natural') >= 0:
+            ctrl = fnat(val)
+        elif key.find('mrs_string') >= 0:
+            ctrl = fstr(val)
+        elif key.find('mrs_realvec') >= 0:
+            ctrl = frvec(to_realvec(val[0], val[1]))
+        elif key.find('mrs_real') >= 0:
+            ctrl = freal(val)
+        elif key.find('mrs_bool') >= 0:
+            ctrl = fbool(val)
+        msys.updControl(key, ctrl)
+
+#    return msys
+
+
+def test():
     # create an array of realvecs to classify
     data = [
         # format: [a, b, c, d, label]
@@ -112,37 +147,85 @@ def train():
         [2, 1, 2, 0],
         [2, 1, 9, 1]
     ]
-    data = to_realvec(data)
+    data = to_realvec(data, 4)
     class_names = "first_class,second_class"
     num_classes = 2
-    """
-    To use the data from the kea tests:
-    data = get_input()
-    data = to_realvec(data)
-    class_names = "blues,classical,country,disco,hiphop,jazz,metal,pop,reggae,rock"
-    num_classes = 10
-    """
     # RealvecSource uses columns instead of rows. god knows why
     data.transpose()
+
+    classifier_string = train(data, num_classes, class_names)
+    predict(data, num_classes, class_names, classifier_string)
+
+
+def train(data, num_classes, class_names):
+    print "TRAINING"
+    net = mng.create("Series", "net")
+
+    # Start setting up our MarSystems
+    rv = mng.create("RealvecSource", "rv")
+    cl = mng.create("Classifier", "cl")
+    net.addMarSystem(rv)
+    net.addMarSystem(cl)
+
+    # Set up the appropriate classifier
+    classifier_children = [('/Series/net/Classifier/cl/mrs_string/enableChild', 'SVMClassifier/svmcl')]
+    cl.updControl(classifier_children[0][0], fstr(classifier_children[0][1]))
 
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
     net.updControl("mrs_natural/inSamples", fnat(1))
 
-    # Set up our Summary system to mirror our data
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
-    net.updControl("Summary/summary/mrs_string/classNames", fstr(class_names))
-    net.updControl("Summary/summary/mrs_natural/nClasses", fnat(num_classes))
 
     # Set up the Classifier system
     net.updControl("Classifier/cl/mrs_natural/nClasses", fnat(num_classes))
-    net.linkControl("Classifier/cl/mrs_string/mode", "Summary/summary/mrs_string/mode")
 
     # Loop over all the input, ticking the system, and updating the Classifier Mode
     net.updControl("Classifier/cl/mrs_string/mode", fstr("train"))
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
 
+    print "DONE TRAINING"
+    d = system_to_dict(cl, classifier_children)
+    print cl.toString()
+    return d
+
+
+def predict(data, num_classes, class_names, classifier_dict):
+    print "PREDICTING"
+    # create up our series system
+    net = mng.create("Series", "net")
+
+    # Start setting up our MarSystems
+    rv = mng.create("RealvecSource", "rv")
+    cl = mng.create("Classifier", "cl")
+    summary = mng.create("Summary", "summary")
+
+    # set up the series
+    net.addMarSystem(rv)
+    net.addMarSystem(cl)
+    net.addMarSystem(summary)
+
+    dict_to_system(classifier_dict, cl)
+
+    print cl.toString()
+
+    # read in the classifier settings
+#    cl.load(classifier_string)
+#    print cl.getControls()
+#    print "DONE READING"
+
+    print "DONE ADDING SYSTEMS"
+    # Set up the number of input samples to the system.
+    # Don't know what this is for but we need it.
+    net.updControl("mrs_natural/inSamples", fnat(1))
+
+    # Set up our Summary system to mirror our data
+    net.updControl("Summary/summary/mrs_string/classNames", fstr(class_names))
+    net.updControl("Summary/summary/mrs_natural/nClasses", fnat(num_classes))
+    net.linkControl("Classifier/cl/mrs_string/mode", "Summary/summary/mrs_string/mode")
+
+    print "SETTING UP DATA SOURCES"
     # Set a "new" data source
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
     net.updControl("RealvecSource/rv/mrs_bool/done", fbool(False))
@@ -150,13 +233,16 @@ def train():
     # Loop over all the input, ticking the system, and classifying it
     net.updControl("Classifier/cl/mrs_string/mode", fstr("predict"))
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
+        print "TICKING"
         net.tick()
+        print "TICKED"
+        o = net.getControl("Classifier/cl/mrs_realvec/processedData").to_realvec()
+        print array(o)
 
     # Tell our summary system that we're done
     net.updControl("Summary/summary/mrs_bool/done", fbool(True))
 
     # Tick the system one final time. This will make the Summary system print its report.
     net.tick()
-
 
 
