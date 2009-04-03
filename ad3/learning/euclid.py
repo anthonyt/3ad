@@ -2,6 +2,7 @@ from numpy import mean, array, dot, sqrt, subtract, zeros
 from twisted.internet import defer
 from marsyas import *
 from sys import exit
+import zlib
 
 def euclidean_distance(a, b):
     """
@@ -95,13 +96,15 @@ def test():
         [2, 1, 2, 0],
         [2, 1, 9, 1]
     ]
-    data = to_realvec(data, 4)
     class_names = "first_class,second_class"
     num_classes = 2
+
     # RealvecSource uses columns instead of rows. god knows why
+    data = to_realvec(data, len(data[0]))
     data.transpose()
 
     classifier_string = train(data, num_classes, class_names)
+    print "Size of string:", len(classifier_string)
     predict(data, num_classes, class_names, classifier_string)
 
 
@@ -132,7 +135,7 @@ def train(data, num_classes, class_names):
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
 
-    return cl.toString()
+    return zlib.compress(cl.toString())
 
 
 def predict(data, num_classes, class_names, classifier_string):
@@ -140,8 +143,9 @@ def predict(data, num_classes, class_names, classifier_string):
     net = mng.create("Series", "net")
 
     # Start setting up our MarSystems
-    rv = mng.create("RealvecSource", "rv")
+    classifier_string = zlib.decompress(classifier_string)
     cl = mng.getMarSystem(classifier_string)
+    rv = mng.create("RealvecSource", "rv")
     summary = mng.create("Summary", "summary")
 
     # set up the series
