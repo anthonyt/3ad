@@ -255,6 +255,11 @@ def train_svm(data):
     # Set up the appropriate classifier
     net.updControl('Classifier/cl/mrs_string/enableChild', fstr('SVMClassifier/svmcl'))
     net.updControl('Classifier/cl/SVMClassifier/svmcl/mrs_string/svm', fstr('ONE_CLASS'))
+    # Tweak some values. Got knows what these actually do. SVM math uses so many variables...
+    net.updControl("Classifier/cl/SVMClassifier/svmcl/mrs_real/nu", freal(0.01));
+    net.updControl("Classifier/cl/SVMClassifier/svmcl/mrs_natural/gamma", fnat(4));
+    net.updControl("Classifier/cl/SVMClassifier/svmcl/mrs_string/kernel", fstr("RBF"));
+
 
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
