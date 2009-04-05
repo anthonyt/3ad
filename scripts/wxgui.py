@@ -180,7 +180,7 @@ class MyMenu(wx.Frame):
             print "--->", "added", file, file.key.encode('hex')
 
         def add_file(val, file_name, tags):
-            add_df = self.controller.add_file(file_added, file_name, tags)
+            add_df = self.controller.add_file(file_added, file_name, user_name=user_name, tags=tags)
             return add_df
 
         if file_dlg.ShowModal() == wx.ID_OK:
@@ -245,7 +245,7 @@ class MyMenu(wx.Frame):
 
         def add_file(val, file_name, tags):
             file_name = u"/Users/anthony/"+file_name
-            add_df = self.controller.add_file(file_added, file_name, tags)
+            add_df = self.controller.add_file(file_added, file_name, user_name=user_name, tags=tags)
             return add_df
 
         def add_plugin(val, name, module_name):
@@ -271,7 +271,7 @@ class MyMenu(wx.Frame):
     def UpdateGuessedTags(self, event):
         def updated(val):
             print "->", "Guessed Tags Updated"
-        df = self.controller.guess_tags(updated)
+        df = self.controller.guess_tags(updated, user_name=user_name)
 
     def SearchFiles(self, event):
         def file_name_cmp(f1, f2):
@@ -309,7 +309,7 @@ class MyMenu(wx.Frame):
             self.model.get_audio_files(got_files)
         else:
             tag_names = taglist.split()
-            self.controller.find_files_by_tags(got_files, tag_names)
+            self.controller.find_files_by_tags(got_files, tag_names, user_name=user_name)
 
 
     def TagFiles(self, event):
@@ -471,10 +471,11 @@ euclidean = Euclidean(model)
 gaussian = Gaussian(model, 100)
 svm = SVM(model)
 
-
-
 # Our controller
 controller = Controller(model, svm)
+
+# Our User
+user_name = sys.argv[2]
 
 app = MyApp(0)
 

@@ -58,10 +58,11 @@ class TagAggregator(object):
         return outer_df
 
 class FileAggregator(object):
-    def __init__(self, controller, model, tag_list):
+    def __init__(self, controller, model, tag_list, user_name=None):
         self.controller = controller
         self.model = model
         self.tag_list = tag_list #list of tag objects
+        self.user_name = user_name
 
         self.num_got_files = 0
         self.file_lists = {}
@@ -100,8 +101,8 @@ class FileAggregator(object):
         else:
             for tag in self.tag_list:
                 self.file_lists[tag.name] = []
-                self.model.get_audio_files(partial(got_files, tag.name), tag=tag)
-                self.model.get_audio_files(partial(got_files, tag.name), guessed_tag=tag)
+                self.model.get_audio_files(partial(got_files, tag.name), tag=tag, user_name=self.user_name)
+                self.model.get_audio_files(partial(got_files, tag.name), guessed_tag=tag, user_name=self.user_name)
 
         return outer_df
 
@@ -205,7 +206,7 @@ class Controller(object):
 
 
 
-    def guess_tags(self, callback, audio_file=None):
+    def guess_tags(self, callback, audio_file=None, user_name=None):
         df = defer.Deferred()
         outer_df = defer.Deferred()
         outer_df.addCallback(callback)
@@ -226,7 +227,7 @@ class Controller(object):
         def got_tags(tags):
             # take care of fetching the tag and audio file objects...
             if audio_file is None:
-                self.model.get_audio_files(partial(got_data, tags))
+                self.model.get_audio_files(partial(got_data, tags), user_name=user_name)
             else:
                 got_data(tags, [audio_file])
 
@@ -244,7 +245,7 @@ class Controller(object):
         return outer_df
 
 
-    def add_file(self, callback, file_name, tags=[]):
+    def add_file(self, callback, file_name, user_name=None, tags=[]):
         df = defer.Deferred()
         outer_df = defer.Deferred()
         outer_df.addCallback(callback)
@@ -252,7 +253,7 @@ class Controller(object):
         def got_file(file):
             #print "\n"
             if file is None:
-                file = AudioFile(file_name)
+                file = AudioFile(file_name, user_name=user_name)
 
                 def save_file(val):
                     save_df = self.model.save(file)
@@ -299,7 +300,7 @@ class Controller(object):
 
 
         #print "\n"
-        self.model.get_audio_file(got_file, file_name=file_name)
+        self.model.get_audio_file(got_file, file_name=file_name, user_name=user_name)
         return outer_df
 
 
@@ -360,7 +361,7 @@ class Controller(object):
         return outer_df
 
 
-    def find_files_by_tags(self, callback, tag_names):
+    def find_files_by_tags(self, callback, tag_names, user_name=None):
         outer_df = defer.Deferred()
         outer_df.addCallback(callback)
 
@@ -375,7 +376,7 @@ class Controller(object):
                 outer_df.callback([])
                 return None
             else:
-                fa = FileAggregator(self, self.model, tags)
+                fa = FileAggregator(self, self.model, tags, user_name=user_name)
                 fa_df = fa.go(got_files)
                 return fa_df
 

@@ -103,7 +103,7 @@ class NetworkHandler(object):
             o = Tag(h['name'], h['vector'], h['key'].decode('hex'))
 
         elif h['type'] == "audio_file":
-            o = AudioFile(h['file_name'], h['vector'], h['key'].decode('hex'))
+            o = AudioFile(h['file_name'], h['vector'], h['user_name'], h['key'].decode('hex'))
 
         else:
             o = None
@@ -344,14 +344,15 @@ class AudioFile(ad3.models.abstract.AudioFile):
         getKey
     """
 
-    def __init__(self, file_name, vector = None, key = None):
+    def __init__(self, file_name, vector = None, user_name = "", key = None):
         ad3.models.abstract.AudioFile.__init__(self, file_name)
 
         self.vector = vector
         self.key = key
+        self.user_name = user_name
 
     def __get_key(self):
-        r = _network_handler.hash_function("audio_file_" + self.file_name)
+        r = _network_handler.hash_function("audio_file_" + self.file_name + self.user_name)
         return r
 
     def save(self):
@@ -359,13 +360,14 @@ class AudioFile(ad3.models.abstract.AudioFile):
         df = defer.Deferred()
 
         def save_my_tuple(val):
-            my_tuple = ("audio_file", self.key, self.file_name)
+            my_tuple = ("audio_file", self.key, self.file_name, self.user_name)
             df = _network_handler.dht_store_tuple(my_tuple)
             return df
 
         def save_value(val):
             my_hash = {'file_name': self.file_name,
                        'vector': self.vector,
+                       'user_name': self.user_name,
                        'key': self.key.encode('hex'),
                        'type': 'audio_file'}
             my_string = simplejson.dumps(my_hash)
@@ -599,12 +601,15 @@ def get_plugin(callback, name = None, module_name = None, plugin_output = None):
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
     return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
-def get_audio_files(callback, file_name=None, tag=None, guessed_tag=None, plugin_output=None):
+def get_audio_files(callback, file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
     """ Return a list of AudioFile objects to the provided callback function.
     By default returns all audio files.
 
     @param file_name: if provided, returns only files with a matching file name
     @type  file_name: unicode
+
+    @param user_name: if provided, returns only files with a matching user name
+    @type  user_name: unicode
 
     @param tag: if provided, returns only files manually tagged with the provided tag
     @type  tag: Tag object
@@ -618,7 +623,7 @@ def get_audio_files(callback, file_name=None, tag=None, guessed_tag=None, plugin
     @param callback: a callback function to pass the results to
     @type  callback: function
     """
-    search_tuples = [ ("audio_file", None, file_name) ]
+    search_tuples = [ ("audio_file", None, file_name, user_name) ]
     if tag is not None:
         search_tuples.append( ("audio_file", None, "tag", tag.key) )
     if guessed_tag is not None:
@@ -628,12 +633,15 @@ def get_audio_files(callback, file_name=None, tag=None, guessed_tag=None, plugin
 
     return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
-def get_audio_file(callback, file_name=None, tag=None, guessed_tag=None, plugin_output=None):
+def get_audio_file(callback, file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
     """ Return a list of AudioFile objects to the provided callback function.
     By default returns all audio files.
 
     @param file_name: if provided, returns only files with a matching file name
     @type  file_name: unicode
+
+    @param user_name: if provided, returns only files with a matching user name
+    @type  user_name: unicode
 
     @param tag: if provided, returns only files manually tagged with the provided tag
     @type  tag: Tag object
@@ -647,7 +655,7 @@ def get_audio_file(callback, file_name=None, tag=None, guessed_tag=None, plugin_
     @param callback: a callback function to pass the results to
     @type  callback: function
     """
-    search_tuples = [ ("audio_file", None, file_name) ]
+    search_tuples = [ ("audio_file", None, file_name, user_name) ]
     if tag is not None:
         search_tuples.append( ("audio_file", None, "tag", tag.key) )
     if guessed_tag is not None:
