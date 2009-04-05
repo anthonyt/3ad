@@ -15,7 +15,7 @@ class SVM(object):
         def got_files(files):
             vectors = [f.vector for f in files]
             tag_vector = train(vectors)
-            outer_df.callback(vector)
+            outer_df.callback(tag_vector)
 
         self.model.get_audio_files(got_files, tag = tag)
 
@@ -142,7 +142,7 @@ def train(data):
     cl.setParent(None)
     cl.updControl("mrs_bool/active", fbool(False))
     cl_str = cl.toString()
-    return zlib.compress(cl_str)
+    return zlib.compress(cl_str).encode('base64')
 
 
 def predict(data, classifier_string):
@@ -157,8 +157,7 @@ def predict(data, classifier_string):
     net = mng.create("Series", "net")
 
     # Un-serialize the Classifier system
-    classifier_string = zlib.decompress(classifier_string)
-    print classifier_string
+    classifier_string = zlib.decompress(classifier_string.decode('base64'))
     cl = mng.getMarSystem(classifier_string)
     # NOTE: the system is currently deactivated, but adding it to the net
     # system will activate it

@@ -16,7 +16,7 @@ class Gaussian(object):
         def got_files(files):
             vectors = [f.vector for f in files]
             tag_vector = train(vectors)
-            outer_df.callback(vector)
+            outer_df.callback(tag_vector)
 
         self.model.get_audio_files(got_files, tag = tag)
 
@@ -94,7 +94,6 @@ def prepare_data(data):
     d = copy(data).tolist()
     for v in d:
         v.append(0)
-    print d
     rv = list_to_realvec(d, len(d[0]))
     rv.transpose()
     return rv
@@ -140,7 +139,7 @@ def train(data):
     cl.setParent(None)
     cl.updControl("mrs_bool/active", fbool(False))
     cl_str = cl.toString()
-    return zlib.compress(cl_str)
+    return zlib.compress(cl_str).encode('base64')
 
 
 def predict(data, classifier_string):
@@ -155,7 +154,7 @@ def predict(data, classifier_string):
     net = mng.create("Series", "net")
 
     # Un-serialize the Classifier system
-    classifier_string = zlib.decompress(classifier_string)
+    classifier_string = zlib.decompress(classifier_string.decode('base64'))
     cl = mng.getMarSystem(classifier_string)
     # NOTE: the system is currently deactivated, but adding it to the net system will activate it
     # activating it now will trigger funny consequences when the net system starts updating controls
