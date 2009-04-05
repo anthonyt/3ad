@@ -22,7 +22,7 @@ class MyMenu(wx.Frame):
     panels = None
 
     def __init__(self, parent, id, title):
-        wx.Frame.__init__(self, parent, id, title, wx.DefaultPosition, wx.Size(600, 450))
+        wx.Frame.__init__(self, parent, id, title, wx.DefaultPosition, wx.Size(600, 500))
 
         # setup some uninitialized instance variables
         self.txt_search = None
@@ -274,11 +274,15 @@ class MyMenu(wx.Frame):
         df = self.controller.guess_tags(updated)
 
     def SearchFiles(self, event):
+        def file_name_cmp(f1, f2):
+            return cmp(f1.file_name, f2.file_name)
+
         def got_files(files):
             print "->", files
             self.lc.DeleteAllItems()
             self.displayed_files = files
             self.statusbar.SetStatusText('. . . Searching . . .')
+            files = sorted(files, file_name_cmp)
 
             for file in files:
                 num_items = self.lc.GetItemCount()
@@ -343,8 +347,6 @@ class MyMenu(wx.Frame):
         in_class = [False, False, True, True, False, False, True]
 
 #        # instantiate our classifiers
-#        gaussian = Gaussian(self.model, 100)
-#        svm = SVM(self.model)
 #        euclidean_distance = euclid.euclidean_distance
 
         # Get all instances in the class
@@ -422,10 +424,9 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, 'My Demo Program!')
         frame.Show(True)
 
-#        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5002)]
-#        udpPort = 5001
-        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
-        udpPort = 5000
+        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5001), ('127.0.0.1', 5002)]
+        udpPort = int(sys.argv[1])
+
 
         self.node = ad3.models.dht.MyNode(udpPort=udpPort)
         print "->", "joining network..."
@@ -462,9 +463,18 @@ from ad3.controller import Controller
 
 defer.setDebugging(True)
 
+# Our Model
 model = ad3.models.dht
+
+# Our classifiers
 euclidean = Euclidean(model)
-controller = Controller(model, euclidean)
+gaussian = Gaussian(model, 100)
+svm = SVM(model)
+
+
+
+# Our controller
+controller = Controller(model, svm)
 
 app = MyApp(0)
 
