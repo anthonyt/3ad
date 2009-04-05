@@ -1,4 +1,4 @@
-from numpy import mean, array, dot, sqrt, subtract, zeros
+from numpy import mean, array, dot, sqrt, subtract, zeros, copy
 from twisted.internet import defer
 from marsyas import *
 from sys import exit
@@ -99,8 +99,10 @@ def test():
     class_names = "first_class,second_class"
     num_classes = 2
 
-    d1 = data
-    d2 = data
+    d1 = copy([d for d in data if d[-1] == 0])
+    d2 = copy(data)
+    for d in d2:
+        d[-1] = 0
 
     t_data_vec = to_realvec(d1, len(data[0]))
     p_data_vec = to_realvec(d2, len(data[0]))
@@ -109,19 +111,19 @@ def test():
     t_data_vec.transpose()
     p_data_vec.transpose()
 
-    classifier_string = train_gaussian(t_data_vec, num_classes)
-    guesses_g = predict_gaussian(p_data_vec, num_classes, class_names, classifier_string)
+    classifier_string = train_gaussian(t_data_vec)
+    guesses_g = predict_gaussian(p_data_vec, classifier_string)
     print "Size of classifier string:", len(classifier_string)
 
-    classifier_string = train_svm(t_data_vec, num_classes)
-    guesses_s = predict_svm(p_data_vec, num_classes, class_names, classifier_string)
+    classifier_string = train_svm(t_data_vec)
+    guesses_s = predict_svm(p_data_vec, classifier_string)
     print "Size of classifier string:", len(classifier_string)
 
     for i in range(0, len(d2)):
-        print "Actual:", d2[i][-1], "  SVM:", int(guesses_s[i][0]), "  Gaussian:", int(guesses_g[i][0]), "  Gaussian Distance:", guesses_g[i][2]
+        print "Actual:", data[i][-1]==0, "  SVM:", int(guesses_s[i][0])==1, "  Gaussian:", guesses_g[i][2]<100
 
 
-def train_gaussian(data, num_classes):
+def train_gaussian(data):
     net = mng.create("Series", "net")
 
     # Start setting up our MarSystems
@@ -140,7 +142,7 @@ def train_gaussian(data, num_classes):
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
 
     # Set up the Classifier system
-    net.updControl("Classifier/cl/mrs_natural/nClasses", fnat(num_classes))
+    net.updControl("Classifier/cl/mrs_natural/nClasses", fnat(1))
 
     # Loop over all the input, ticking the system, and updating the Classifier Mode
     net.updControl("Classifier/cl/mrs_string/mode", fstr("train"))
@@ -158,7 +160,7 @@ def train_gaussian(data, num_classes):
     return zlib.compress(cl_str)
 
 
-def predict_gaussian(data, num_classes, class_names, classifier_string):
+def predict_gaussian(data, classifier_string):
     # create up our series system
     net = mng.create("Series", "net")
 
@@ -170,43 +172,30 @@ def predict_gaussian(data, num_classes, class_names, classifier_string):
 
     # Set up up our other MarSystems
     rv = mng.create("RealvecSource", "rv")
-    summary = mng.create("Summary", "summary")
 
     # set up the series
     net.addMarSystem(rv)
     net.addMarSystem(cl)
-    net.addMarSystem(summary)
 
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
     net.updControl("mrs_natural/inSamples", fnat(1))
-
-    # Set up our Summary system to mirror our data
-    net.updControl("Summary/summary/mrs_string/classNames", fstr(class_names))
-    net.updControl("Summary/summary/mrs_natural/nClasses", fnat(num_classes))
 
     # Set a "new" data source
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
     net.updControl("RealvecSource/rv/mrs_bool/done", fbool(False))
 
     # Loop over all the input, ticking the system, and classifying it
-    net.updControl("Summary/summary/mrs_string/mode", fstr("predict"))
     guesses = []
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
-        o = net.getControl("Classifier/cl/mrs_realvec/processedData").to_realvec()
+        o = net.getControl("mrs_realvec/processedData").to_realvec()
         guesses.append(array(o))
-
-    # Tell our summary system that we're done
-    net.updControl("Summary/summary/mrs_bool/done", fbool(True))
-
-    # Tick the system one final time. This will make the Summary system print its report.
-    net.tick()
 
     return guesses
 
 
-def train_svm(data, num_classes):
+def train_svm(data):
     net = mng.create("Series", "net")
 
     # Start setting up our MarSystems
@@ -217,7 +206,7 @@ def train_svm(data, num_classes):
 
     # Set up the appropriate classifier
     net.updControl('Classifier/cl/mrs_string/enableChild', fstr('SVMClassifier/svmcl'))
-#    net.updControl('Classifier/cl/SVMClassifier/svmcl/mrs_string/svm', fstr('ONE_CLASS'))
+    net.updControl('Classifier/cl/SVMClassifier/svmcl/mrs_string/svm', fstr('ONE_CLASS'))
 
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
@@ -226,7 +215,7 @@ def train_svm(data, num_classes):
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
 
     # Set up the Classifier system
-    net.updControl("Classifier/cl/mrs_natural/nClasses", fnat(num_classes))
+    net.updControl("Classifier/cl/mrs_natural/nClasses", fnat(1))
 
     # Loop over all the input, ticking the system, and updating the Classifier Mode
     net.updControl("Classifier/cl/mrs_string/mode", fstr("train"))
@@ -244,7 +233,7 @@ def train_svm(data, num_classes):
     return zlib.compress(cl_str)
 
 
-def predict_svm(data, num_classes, class_names, classifier_string):
+def predict_svm(data, classifier_string):
     # create up our series system
     net = mng.create("Series", "net")
 
@@ -256,37 +245,24 @@ def predict_svm(data, num_classes, class_names, classifier_string):
 
     # Set up up our other MarSystems
     rv = mng.create("RealvecSource", "rv")
-    summary = mng.create("Summary", "summary")
 
     # set up the series
     net.addMarSystem(rv)
     net.addMarSystem(cl)
-    net.addMarSystem(summary)
 
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
     net.updControl("mrs_natural/inSamples", fnat(1))
-
-    # Set up our Summary system to mirror our data
-    net.updControl("Summary/summary/mrs_string/classNames", fstr(class_names))
-    net.updControl("Summary/summary/mrs_natural/nClasses", fnat(num_classes))
 
     # Set a "new" data source
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
     net.updControl("RealvecSource/rv/mrs_bool/done", fbool(False))
 
     # Loop over all the input, ticking the system, and classifying it
-    net.updControl("Summary/summary/mrs_string/mode", fstr("predict"))
     guesses = []
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
-        o = net.getControl("Classifier/cl/mrs_realvec/processedData").to_realvec()
+        o = net.getControl("mrs_realvec/processedData").to_realvec()
         guesses.append(array(o))
-
-    # Tell our summary system that we're done
-    net.updControl("Summary/summary/mrs_bool/done", fbool(True))
-
-    # Tick the system one final time. This will make the Summary system print its report.
-    net.tick()
 
     return guesses
