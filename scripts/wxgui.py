@@ -306,7 +306,7 @@ class MyMenu(wx.Frame):
 
         taglist = self.txt_search.GetValue()
         if taglist == '':
-            self.model.get_audio_files(got_files)
+            self.model.get_audio_files(got_files, user_name=user_name)
         else:
             tag_names = taglist.split()
             self.controller.find_files_by_tags(got_files, tag_names, user_name=user_name)
@@ -421,7 +421,7 @@ class MyMenu(wx.Frame):
 
 class MyApp(wx.App):
     def OnInit(self):
-        frame = MyMenu(None, -1, 'My Demo Program!')
+        frame = MyMenu(None, -1, user_name+"'s Library: 3AD Demo")
         frame.Show(True)
 
         knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5001), ('127.0.0.1', 5002)]
