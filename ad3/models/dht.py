@@ -14,6 +14,7 @@ from time import time
 from sets import Set
 from twisted.internet import defer
 from twisted.internet import reactor
+from functools import partial
 
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
@@ -24,12 +25,7 @@ class KeyAggregator(object):
 
     def go(self, callback):
         def got_tuples(tuples):
-            if tuples is None:
-                # not sure if this is necessary
-                # depends what get_tuples() returns (below)
-                keys = []
-            else:
-                keys = [t[1] for t in tuples]
+            keys = [t[1] for t in tuples]
 
             self.key_lists.append(keys)
 
@@ -43,9 +39,23 @@ class KeyAggregator(object):
 
                 callback(list(keys))
 
+        def cache_tuples(dTuple, result_tuples):
+            if result_tuples is None:
+                result_tuples = []
+            # add these tuples to the cache!!
+            self.net_handler.cache_store_tuples(dTuple, result_tuples)
+            # continue execution
+            got_tuples(result_tuples)
+
         # for each search tuple, run our got_tuples function on the resulting tuple rows
         for dTuple in self.tuple_list:
-            self.net_handler.dht_get_tuples(dTuple, got_tuples)
+            # attempt to fetch cached results
+            result_tuples = self.net_handler.cache_get_tuples(dTuple)
+            if result_tuples is not None:
+                got_tuples(result_tuples)
+            else:
+                # if there are no cached results, get new results
+                self.net_handler.dht_get_tuples(dTuple, partial(cache_tuples, dTuple))
 
 
 class ObjectAggregator(object):
@@ -253,7 +263,7 @@ class NetworkHandler(object):
         if key in self._cache:
             entry = self._cache[key]
             if int(time()) < entry[0]:
-                #print "-> Fetching item from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
+                print "-> Fetching object from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
                 return entry[1]
 
         return None
@@ -265,6 +275,44 @@ class NetworkHandler(object):
         """
         lifetime = int(time()) + 30
         self._cache[key] = (lifetime, obj)
+
+    def cache_get_tuples(self, search_tuple):
+        """
+        if the tuple list exists in our cache
+        and its lifetime has not expired
+        return it. else return None
+        """
+        sanitized = []
+        for t in search_tuple:
+            if t is None:
+                sanitized.append(t)
+            else:
+                sanitized.append(t.encode('base64'))
+        key = simplejson.dumps(sanitized)
+
+        if key in self._cache:
+            entry = self._cache[key]
+            if int(time()) < entry[0]:
+                print "-> Fetching tuple from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
+                return entry[1]
+
+        return None
+
+    def cache_store_tuples(self, search_tuple, result_tuples):
+        """
+        store the tuple list in our cache
+        with an end of life timestamp
+        """
+        sanitized = []
+        for t in search_tuple:
+            if t is None:
+                sanitized.append(t)
+            else:
+                sanitized.append(t.encode('base64'))
+        key = simplejson.dumps(sanitized)
+
+        lifetime = int(time()) + 30
+        self._cache[key] = (lifetime, result_tuples)
 
 _network_handler = None
 
