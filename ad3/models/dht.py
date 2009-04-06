@@ -351,6 +351,9 @@ class AudioFile(ad3.models.abstract.AudioFile):
         self.key = key
         self.user_name = user_name
 
+    def __repr__(self):
+        return "<AudioFile('%s', '%s')>" % (self.file_name, self.user_name)
+
     def __get_key(self):
         r = _network_handler.hash_function("audio_file_" + self.file_name + self.user_name)
         return r
