@@ -168,6 +168,11 @@ class MyMenu(wx.Frame):
 
     def AddFiles(self, event):
         file_dlg = wx.FileDialog(self, "Choose a file", os.getcwd(), "", "", wx.OPEN | wx.MULTIPLE)
+        num_files = 0
+        num_finished = [0]
+
+        def done(val):
+            self.statusbar.SetStatusText("All New Files Added!")
 
         def file_added(result):
             (file, added) = result
@@ -179,7 +184,7 @@ class MyMenu(wx.Frame):
                 return "file_added_false"
             print "--->", "added", file, file.key.encode('hex')
 
-        def add_file(val, file_name, tags):
+        def add_file(file_name, tags):
             add_df = self.controller.add_file(file_added, file_name, user_name=user_name, tags=tags)
             return add_df
 
@@ -197,11 +202,15 @@ class MyMenu(wx.Frame):
                 tag_names = []
             txt_dlg.Destroy()
 
+            num_files = len(files)
+
             # start the adding
-            df = defer.Deferred()
+            deferreds = []
             for file_name in files:
-                df.addCallback(add_file, file_name, tag_names)
-            df.callback(None)
+                deferreds.append(add_file(file_name, tag_names))
+            df = defer.DefferedList(deferreds, consumeErrors=1)
+            df.addCallback(done)
+            self.statusbar.SetStatusText(". . . Adding Files . . .")
 
         file_dlg.Destroy()
 
@@ -266,11 +275,15 @@ class MyMenu(wx.Frame):
     def UpdateTagVectors(self, event):
         def updated(val):
             print "->", "Tag Vectors Updated"
+            self.statusbar.SetStatusText("Tag Vectors Updated!")
+        self.statusbar.SetStatusText(". . . Updating Tag Vectors . . .")
         df = self.controller.update_tag_vectors(updated)
 
     def UpdateGuessedTags(self, event):
         def updated(val):
             print "->", "Guessed Tags Updated"
+            self.statusbar.SetStatusText("Tags Guessed!")
+        self.statusbar.SetStatusText(". . . Guessing new Tags . . .")
         df = self.controller.guess_tags(updated, user_name=user_name)
 
     def SearchFiles(self, event):
@@ -424,11 +437,11 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, user_name+"'s Library: 3AD Demo")
         frame.Show(True)
 
-        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5001), ('127.0.0.1', 5002)]
+        knownNodes = [('24.68.144.235', 4002), ('192.168.1.142', 4003), ('127.0.0.1', 4001)]
         udpPort = int(sys.argv[1])
 
 
-        self.node = ad3.models.dht.MyNode(udpPort=udpPort)
+        self.node = ad3.models.dht.MyNode(udpPort=udpPort)#, networkProtocol=ad3.models.dht.MyProtocol)
         print "->", "joining network..."
         self.node.joinNetwork(knownNodes)
         print "->", "joined network..."
@@ -468,11 +481,11 @@ model = ad3.models.dht
 
 # Our classifiers
 euclidean = Euclidean(model)
-gaussian = Gaussian(model, 100)
+gaussian = Gaussian(model, 80)
 svm = SVM(model)
 
 # Our controller
-controller = Controller(model, svm)
+controller = Controller(model, gaussian)
 
 # Our User
 user_name = sys.argv[2]

@@ -10,6 +10,7 @@ import entangled.dtuple
 import entangled.kademlia.contact
 import entangled.kademlia.msgtypes
 from entangled.kademlia.node import rpcmethod
+from entangled.kademlia.protocol import KademliaProtocol
 from time import time
 from sets import Set
 from twisted.internet import defer
@@ -273,7 +274,7 @@ class NetworkHandler(object):
         store the object in our cache
         with an end of life timestamp
         """
-        lifetime = int(time()) + 30
+        lifetime = int(time()) + 300
         self._cache[key] = (lifetime, obj)
 
     def cache_get_tuples(self, search_tuple):
@@ -311,10 +312,12 @@ class NetworkHandler(object):
                 sanitized.append(t.encode('base64'))
         key = simplejson.dumps(sanitized)
 
-        lifetime = int(time()) + 30
+        lifetime = int(time()) + 10
         self._cache[key] = (lifetime, result_tuples)
 
 _network_handler = None
+_dht_df = defer.Deferred()
+_dht_df.callback(None)
 
 def set_network_handler(obj):
     """
@@ -322,9 +325,16 @@ def set_network_handler(obj):
     should be an instance of the network handler class above
     will be used by all functions below
     """
-    #print "->", "setting network handler!", obj
+    print "->", "setting network handler!", obj
     global _network_handler
     _network_handler = obj
+
+    def do_nothing(val):
+        print "Doing nothing!"
+        return val
+
+    _dht_df.addCallback(do_nothing)
+
 
 class Plugin(ad3.models.abstract.Plugin):
     """
@@ -405,6 +415,9 @@ class AudioFile(ad3.models.abstract.AudioFile):
     def __get_key(self):
         r = _network_handler.hash_function("audio_file_" + self.file_name + self.user_name)
         return r
+
+    def unsaved_key(self):
+        return self.__get_key()
 
     def save(self):
         outer_df = defer.Deferred()
@@ -737,55 +750,102 @@ def update_vector(plugin, audio_file):
     @param audio_file: the audio file to run the plugin on
     @type  audio_file: AudioFile
     """
-    outer_df = defer.Deferred()
-    def done(val):
-        print "TRIGGERING OUTER_DF", val
-        outer_df.callback(val)
+    print "------\n -> Beginning update vector"
 
-    def calculate_vector_yourself(val):
-        vector = plugin.create_vector(str(audio_file.file_name))
-        po = PluginOutput(vector, plugin.key, audio_file.key)
+    # list to store the contact we offloaded to
+    # sendOffloadCommand() method updates its value
+    struct = {
+        'contact': None,
+        'module_name': plugin.module_name,
+        'file_uri': 'http://127.0.0.1/audio'+ audio_file.file_name,
+        'downloaded': False,
+        'complete': False,
+        'failed': False,
+        'vector': None,
+        'timestamp': int(time())
+    }
+
+    df_chain = defer.Deferred()
+    outer_df = defer.Deferred()
+    poll_cb = None
+
+    audio_key = audio_file.key
+
+    if audio_key is None:
+        # if the file hasn't been saved yet, audio_file.key won't be set
+        audio_key = audio_file.unsaved_key()
+
+    def done(val):
+        print "Plugin Output Created and Saved. Calling back now.", val
+        outer_df.callback(None)
+
+    def save_plugin_output(vector):
+        po = PluginOutput(vector, plugin.key, audio_key)
         df = save(po)
         df.addCallback(done)
         return df
 
-    def error(failure):
-        print "Error getting vector from contact", failure.getErrorMessage()
-        calculate_vector_yourself(None)
-
-    def got_poll(val):
-#        timeoutCall = reactor.callLater(5, poll)
-        pass
-
-    def poll():
-        pass
-
-
-    def request_accepted(val):
-        print "REQUEST ACCEPTED!! by", val
-        # start the polling loop here.
-#        timeoutCall = reactor.callLater(5, poll)
-        df = calculate_vector_yourself(val)
+    def calculate_vector_yourself(val):
+        print "Calculating the damned vector myself"
+        vector = plugin.create_vector(str(audio_file.file_name))
+        df = save_plugin_output(vector)
         return df
+
+    def error(failure):
+        print "Error getting vector from contact. MSG: ", failure.getErrorMessage()
+        df = calculate_vector_yourself(None)
+        return df
+
+    def polled(val):
+        if struct['failed']:
+            print "Poll failed"
+            df = calculate_vector_yourself(None)
+        elif struct['complete'] and not struct['failed']:
+            print "Poll complete!"
+            df = save_plugin_output(struct['vector'])
+        else:
+            print "Poll unfinished. sheduling another one"
+            # schedule another poll
+            df_chain.addCallback(poll_cb)
+        return val
+
+    def poll(val):
+        if struct['complete']:
+            # we're through!
+            print "transaction complete!"
+            return None
+        elif int(time()) - struct['timestamp'] > 45:
+            # timed out. just calculate it yourself
+            print "Transaction timed out. do it yourself."
+            df = calculate_vector_yourself(None)
+        else:
+            print "POLLING"
+            # execute a poll and call the "polled" method when it's done
+            df = _network_handler.node.pollOffloadedCalculation(audio_key, struct)
+            df.addBoth(polled)
+
+    poll_cb = partial(reactor.callLater, 5, poll)
+
+    def request_accepted(contact):
+        print "REQUEST ACCEPTED!!"
+        # start the polling loop here.
+        df_chain.addCallback(poll_cb)
+        df_chain.callback(None)
 
     def farm_out_vector_calculation():
         print "Attempting to farm out vector calculation"
-
-        hash = {'module_name': plugin.module_name, 'file_uri': 'http://127.0.0.1/audio' + audio_file.file_name}
-        json = simplejson.dumps(hash)
-        df = _network_handler.node.sendOffloadCommand(audio_file.key, json)
+        df = _network_handler.node.sendOffloadCommand(audio_key, struct)
         return df
 
-#    df = farm_out_vector_calculation()
-    df = defer.Deferred()
+    df = farm_out_vector_calculation()
 
     # best case scenario, farming out the calculation works
     df.addCallback(request_accepted)
+
     # if farming out calculation fails (eg. times out)
     df.addErrback(error)
 
-    df.callback(None)
-
+    print "-> returning update vector"
     return outer_df
 
 def initialize_storage(callback):
@@ -868,15 +928,69 @@ def guess_tag_for_file(audio_file, tag):
 
     return outer_df
 
+class MyProtocol(entangled.kademlia.protocol.KademliaProtocol):
+    def sendRPC(self, contact, method, args, rawResponse=False):
+        print "-->> myprotocol: sendRPC(", contact, ",", method
+        outer_df = defer.Deferred()
+
+        def error(failure):
+            print "myprotocol: ERROR", failure
+            outer_df.errback(failure)
+            return failure
+
+        def got_response(val):
+            print "myprotocol: GOT RESPONSE", val
+            outer_df.callback(val)
+            return val
+
+        def actually_send(val):
+            print "myprotocol: SENDING (", method, ",", args, ",", rawResponse,")"
+            df = KademliaProtocol.sendRPC(self, contact, method, args, rawResponse)
+            return df
+
+        # the deferred returned by this is what _dht_df waits for
+        # it should get called back as soon as we get a response message
+        def handle_dfs(val):
+            print "<<---------->>"
+            print "myprotocol: HANDLING DFS"
+            df = defer.Deferred()
+            def done(val):
+                print "myprotocol: DONE"
+                import time
+                time.sleep(0.1)
+                print "myprotocol: Continuing..."
+                df.callback(None)
+
+            inner_df = defer.Deferred()
+            inner_df.addCallback(actually_send)
+            inner_df.addCallback(got_response)
+            inner_df.addErrback(error)
+            inner_df.addBoth(done)
+            inner_df.callback(None)
+
+            return df
+
+        # should execute immediately
+        _dht_df.addCallback(handle_dfs)
+
+        # should get called back as soon as msg returns.
+        print "--<< myprotocol: RETURNING outer_df"
+        return outer_df
+
 class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
-    def sendOffloadCommand(self, key, value):
+    def sendOffloadCommand(self, key, struct):
+        hash = {
+            'module_name': struct['module_name'],
+            'file_uri': struct['file_uri']
+        }
+        value = simplejson.dumps(hash)
+
         def executeRPC(nodes):
             contact = random.choice(nodes)
-            originalPublisherID = self.id
-            age = 0
-
             print "SENDING RPC TO:", contact
-            df = contact.offload(key, value, originalPublisherID, age)
+            struct['contact'] = contact
+
+            df = contact.offload(key, value, self.id)
             return df
 
         # Find k nodes closest to the key...
@@ -885,48 +999,71 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
         return df
 
-    def pollOffloadedCalculation(self, key, value, contact):
-        originalPublisherID = self.id
-        age = 0
-        df = contact.poll(key, value, originalPublisherID, age)
+    def pollOffloadedCalculation(self, key, struct):
+        hash = {
+            'module_name': struct['module_name'],
+            'file_uri': struct['file_uri']
+        }
+        value = simplejson.dumps(hash)
+
+        def update_struct(val):
+            response = simplejson.loads(val)
+            struct['complete'] = response['complete']
+            struct['failed'] = response['failed']
+            struct['vector'] = response['vector']
+
+        df = struct['contact'].poll(key, value, self.id)
+        df.addCallback(update_struct)
+
         return df
 
     @rpcmethod
-    def offload(self, key, value, originalPublisherID=None, age=0, **kwargs):
+    def offload(self, key, value, originalPublisherID=None, **kwargs):
+        print "-------------"
         hash = simplejson.loads(value)
+
         plugin_module = hash['module_name']
         file_uri = hash['file_uri']
         id = plugin_module + file_uri
+        print "RECEIVED AN OFFLOAD RPC!", file_uri, plugin_module
 
         if not hasattr(self, 'computations'):
             self.computations = {}
-        self.computations[plugin_module+file_uri] = {'complete': False, 'vector': None, 'failed': False}
 
-        def do_computation(val):
-            plugin = Plugin('temp', plugin_module)
-            print "Downloading", file_uri
-            print urllib.quote(file_uri)
-            (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
-            print "Computing vector"
-            vector = plugin.create_vector(file_name)
-            self.computations[id]['complete'] = True
-            self.computations[id]['vector'] = vector
-            os.remove(file_name)
-            return None
+        self.computations[id] = {
+            'complete': False,
+            'vector': None,
+            'failed': False,
+            'downloaded': False
+        }
 
-        def computation_error(failure):
-            print "Computation error :(", failure.getErrorMessage()
-            self.computations[id]['complete'] = True
-            self.computations[id]['failed'] = True
+        def do_computation():
+            try:
+                plugin = Plugin('temp', plugin_module)
 
-        df = defer.Deferred()
-        df.addCallback(do_computation)
-        df.addErrback(computation_error)
-        df.callback(None)
+                print "Downloading", file_uri
+                (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
+                self.computations[id]['downloaded'] = True
+
+                print "Computing vector for", file_name
+                vector = plugin.create_vector(file_name)
+                self.computations[id]['complete'] = True
+                self.computations[id]['vector'] = vector
+
+                os.remove(file_name)
+            except Exception:
+                print "Computation error :(", failure.getErrorMessage()
+                self.computations[id]['complete'] = True
+                self.computations[id]['failed'] = True
+            finally:
+                return None
+
+        from twisted.internet import threads
+        df = threads.deferToThread(do_computation)
 
         #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
         #file.write(value)
-        print "RECEIVED AN OFFLOAD RPC!", file_uri, plugin_module
+        print "OFFLOAD FINISHED"
         return "OK"
 
     @rpcmethod
@@ -938,12 +1075,15 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
         if not hasattr(self, 'computations') or not self.computations.has_key(id):
             # we've never heard of the requested offload operation. make something up!
-            result = {'complete': True, 'vector': None, 'failed': True}
+            print "Returning BS poll"
+            result = {'complete': True, 'vector': None, 'failed': True, 'downloaded': False}
         elif self.computations[id]['complete']:
             # we've finished the requested offload operation. remove if from the list and return it
+            print "Returning finished poll"
             result = self.computations.pop(id)
         else:
             # we haven't finished the requested offload operation, but we have some data on it
+            print "Returning unfinished poll"
             result = self.computations[id]
 
         return simplejson.dumps(result)

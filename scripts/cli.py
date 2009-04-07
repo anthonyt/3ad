@@ -43,6 +43,7 @@ knownNodes = [('24.68.144.235', 4002)]
 knownNodes = [('127.0.0.1', 4000)]
 udpPort = int(sys.argv[1])
 node = ad3.models.dht.MyNode(udpPort=udpPort)
+#node = ad3.models.dht.MyNode(udpPort=udpPort, networkProtocol=ad3.models.dht.MyProtocol)
 print "->", "joining network..."
 node.joinNetwork(knownNodes)
 print "->", "joined network..."

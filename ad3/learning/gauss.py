@@ -23,9 +23,9 @@ class Gaussian(object):
         return outer_df
 
 
-    def calculate_file_vector(self, callback, file):
+    def calculate_file_vector(self, file):
+        print "Calculating File Vector!"
         outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
 
         def got_outputs(plugin_outputs):
             vector = []
