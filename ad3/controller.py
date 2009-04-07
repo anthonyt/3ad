@@ -224,8 +224,80 @@ class Controller(object):
         return outer_df
 
     def add_files(self, file_names, user_name, tags=None):
+        outer_df = defer.Deferred()
+        file_save_df = defer.Deferred()
+        file_save_df.callback(None)
+
+        num_files = len(file_names) - 1
+        num_got = [0]
+        result_tuples = {}
+
+        def done(val):
+            print "Calling back outer_df with", result_tuples
+            outer_df.callback(result_tuples)
+
         if tags is None:
             tags = []
+
+        def got_file(file_name, file):
+            if file is not None:
+                # file already exists
+                result_tuples[file_name] = (file, False)
+            else:
+                # make a new file!
+                file = AudioFile(file_name, user_name=user_name)
+                result_tuples[file_name] = (file, True)
+
+                def save_file(val):
+                    print "--> Saving", file_name
+                    save_df = self.model.save(file)
+                    return save_df
+
+                def apply_vector(vector):
+                    print "--> Applying vector to ", file_name, vector
+                    file.vector = vector
+
+                    # return a reference to the save_file function
+                    return save_file
+
+                df = defer.Deferred()
+                df.addCallback(self.create_vectors) # passes the vector to the next callback
+                df.addCallback(apply_vector) # passes the save function to the next callback
+                df.addCallback(file_save_df.addCallback) # append our save function to the queue
+
+                if len(tags) > 0:
+                    def got_tags(tags):
+                        def apply(value, file, tag):
+                            print "Attempting to apply:", tag, "to", file
+                            tag_df = self.model.apply_tag_to_file(file, tag)
+                            return tag_df
+
+                        for t in tags:
+                            file_save_df.addCallback(apply, file, t)
+
+                    def get_tags(val):
+                        ta = TagAggregator(self, self.model, tags, True)
+                        ta_df = ta.go(got_tags)
+                        return ta_df
+
+                    file_save_df.addCallback(get_tags)
+
+                # Pass "file" to our first callback
+                df.callback(file)
+
+            # If this is the last iteration...
+            last_one = (num_got[0] >= num_files)
+            num_got[0] += 1
+
+            if last_one:
+                print "--> LAST ONE!"
+                file_save_df.addCallback(done)
+
+        for file_name in file_names:
+            print "Getting audio file..."
+            self.model.get_audio_file(partial(got_file, file_name), file_name=file_name, user_name=user_name)
+
+        return outer_df
 
 
 

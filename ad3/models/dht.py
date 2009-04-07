@@ -101,7 +101,7 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        #print "->", "OBJ FROM ROW", row
+        print "->", "OBJ FROM ROW", row
         h = simplejson.loads(row)
 
         if h['type'] == "plugin":
@@ -169,6 +169,7 @@ class NetworkHandler(object):
             """
             @type result  tuple or None
             """
+            print "SUCCESS? ->", result
             callback(result)
 
         def error(failure):
@@ -824,7 +825,7 @@ def update_vector(plugin, audio_file):
             df = _network_handler.node.pollOffloadedCalculation(audio_key, struct)
             df.addBoth(polled)
 
-    poll_cb = partial(reactor.callLater, 5, poll)
+    poll_cb = partial(reactor.callLater, 10, poll)
 
     def request_accepted(contact):
         print "REQUEST ACCEPTED!!"
