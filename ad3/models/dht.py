@@ -15,6 +15,7 @@ from time import time
 from sets import Set
 from twisted.internet import defer
 from twisted.internet import reactor
+from twisted.internet import threads
 from functools import partial
 
 class KeyAggregator(object):
@@ -765,8 +766,11 @@ def update_vector(plugin, audio_file):
 
     def calculate_vector_yourself(val):
         print "Calculating the damned vector myself"
-        vector = plugin.create_vector(str(audio_file.file_name))
-        df = save_plugin_output(vector)
+        # Make blocking function "plugin.create_vector" nonblocking
+        # by deferring it to its own thread!
+        fname = str(audio_file.file_name)
+        df = threads.deferToThread(plugin.create_vector, fname)
+        df.addCallback(save_plugin_output)
         return df
 
     def error(failure):
@@ -1039,7 +1043,6 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
             finally:
                 return None
 
-        from twisted.internet import threads
         df = threads.deferToThread(do_computation)
 
         #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
