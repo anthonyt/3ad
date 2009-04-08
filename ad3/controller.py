@@ -240,6 +240,8 @@ class Controller(object):
             tags = []
 
         def got_file(file_name, file):
+            last_one = False
+
             if file is not None:
                 # file already exists
                 result_tuples[file_name] = (file, False)
@@ -250,6 +252,10 @@ class Controller(object):
 
                 def save_file(val):
                     print "--> Saving", file_name
+                    if last_one:
+                        print "--------- lastone callback'd!"
+                        file_save_df.addCallback(done)
+
                     save_df = self.model.save(file)
                     return save_df
 
@@ -290,8 +296,7 @@ class Controller(object):
             num_got[0] += 1
 
             if last_one:
-                print "--> LAST ONE!"
-                file_save_df.addCallback(done)
+                print "--> LAST ONE! num_got =", num_got[0]
 
         for file_name in file_names:
             print "Getting audio file..."
