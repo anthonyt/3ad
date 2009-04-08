@@ -1025,6 +1025,9 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
                 print "Computing vector for", file_name
                 vector = plugin.create_vector(file_name)
+                if len(vector) is 0:
+                    # Zero length vector is an indication that Marsyas choked.
+                    self.computations[id]['failed'] = True
                 self.computations[id]['complete'] = True
                 self.computations[id]['vector'] = vector
 
