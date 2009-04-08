@@ -336,8 +336,45 @@ def set_network_handler(obj):
 
     _dht_df.addCallback(do_nothing)
 
+class SaveableModel(object):
+    def get_key(self):
+        return self.key or self._get_key()
 
-class Plugin(ad3.models.abstract.Plugin):
+    def _get_key():
+        return None
+
+    def _get_tuple():
+        return ()
+
+    def _save(self, my_hash):
+        outer_df = defer.Deferred()
+        df = defer.Deferred()
+
+        def save_my_tuple(val):
+            my_tuple = self._get_tuple()
+            df = _network_handler.dht_store_tuple(my_tuple)
+            return df
+
+        def save_value(val):
+            my_hash['key'] = self.key.encode('hex')
+            my_string = simplejson.dumps(my_hash)
+            df = _network_handler.dht_store_value(self.key, my_string)
+            return df
+
+        def done(val):
+            outer_df.callback(val)
+
+        if self.key is None:
+            self.key = self._get_key()
+            df.addCallback(save_my_tuple)
+
+        df.addCallback(save_value)
+        df.addCallback(done)
+        df.callback(None)
+
+        return outer_df
+
+class Plugin(ad3.models.abstract.Plugin, SaveableModel):
     """
     Plugin Object
 
@@ -355,42 +392,24 @@ class Plugin(ad3.models.abstract.Plugin):
         ad3.models.abstract.Plugin.__init__(self, name, module_name)
         self.key = key
 
-    def __get_key(self):
-        global _network_handler
-        return _network_handler.hash_function("plugin_" + self.name + self.module_name)
+    def _get_key(self):
+        r = _network_handler.hash_function("plugin_" + self.name + self.module_name)
+        return r
+
+    def _get_tuple(self):
+        my_tuple = ("plugin", self.key, self.name, self.module_name)
+        return my_tuple
 
     def save(self):
-        outer_df = defer.Deferred()
-        df = defer.Deferred()
+        my_hash = {
+            'name': self.name,
+            'module_name': self.module_name,
+            'type': 'plugin'
+        }
+        df = self._save(my_hash)
+        return df
 
-        def save_my_tuple(val):
-            my_tuple = ("plugin", self.key, self.name, self.module_name)
-            df =  _network_handler.dht_store_tuple(my_tuple)
-            return df
-
-        def save_value(val):
-            my_hash = {'name': self.name,
-                       'module_name': self.module_name,
-                       'key': self.key.encode('hex'),
-                       'type': 'plugin'}
-            my_string = simplejson.dumps(my_hash)
-            df = _network_handler.dht_store_value(self.key, my_string)
-            return df
-
-        def done(val):
-            outer_df.callback(val)
-
-        if self.key is None:
-            self.key = self.__get_key()
-            df.addCallback(save_my_tuple)
-            df.addCallback(save_value)
-
-        df.addCallback(done)
-        df.callback(None)
-
-        return outer_df
-
-class AudioFile(ad3.models.abstract.AudioFile):
+class AudioFile(ad3.models.abstract.AudioFile, SaveableModel):
     """
     Audio File Object
 
@@ -413,46 +432,25 @@ class AudioFile(ad3.models.abstract.AudioFile):
     def __repr__(self):
         return "<AudioFile('%s', '%s')>" % (self.file_name, self.user_name)
 
-    def __get_key(self):
+    def _get_key(self):
         r = _network_handler.hash_function("audio_file_" + self.file_name + self.user_name)
         return r
 
-    def unsaved_key(self):
-        return self.__get_key()
+    def _get_tuple(self):
+        my_tuple = ("audio_file", self.key, self.file_name, self.user_name)
+        return my_tuple
 
     def save(self):
-        outer_df = defer.Deferred()
-        df = defer.Deferred()
+        my_hash = {
+            'file_name': self.file_name,
+            'vector': self.vector,
+            'user_name': self.user_name,
+            'type': 'audio_file'
+        }
+        df = self._save(my_hash)
+        return df
 
-        def save_my_tuple(val):
-            my_tuple = ("audio_file", self.key, self.file_name, self.user_name)
-            df = _network_handler.dht_store_tuple(my_tuple)
-            return df
-
-        def save_value(val):
-            my_hash = {'file_name': self.file_name,
-                       'vector': self.vector,
-                       'user_name': self.user_name,
-                       'key': self.key.encode('hex'),
-                       'type': 'audio_file'}
-            my_string = simplejson.dumps(my_hash)
-            df = _network_handler.dht_store_value(self.key, my_string)
-            return df
-
-        def done(val):
-            outer_df.callback(val)
-
-        if self.key is None:
-            self.key = self.__get_key()
-            df.addCallback(save_my_tuple)
-
-        df.addCallback(save_value)
-        df.addCallback(done)
-        df.callback(None)
-
-        return outer_df
-
-class Tag(ad3.models.abstract.Tag):
+class Tag(ad3.models.abstract.Tag, SaveableModel):
     """
     Tag Object
 
@@ -467,42 +465,24 @@ class Tag(ad3.models.abstract.Tag):
         self.vector = vector
         self.key = key
 
-    def __get_key(self):
+    def _get_key(self):
         return _network_handler.hash_function("tag_" + self.name)
 
+    def _get_tuple(self):
+        my_tuple = ("tag", self.key, self.name)
+        return my_tuple
+
     def save(self):
-        outer_df = defer.Deferred()
-        df = defer.Deferred()
-
-        def save_my_tuple(val):
-            my_tuple = ("tag", self.key, self.name)
-            df = _network_handler.dht_store_tuple(my_tuple)
-            return df
-
-        def save_value(val):
-            my_hash = {'name': self.name,
-                       'vector': self.vector,
-                       'key': self.key.encode('hex'),
-                       'type': 'tag' }
-            my_string = simplejson.dumps(my_hash)
-            df = _network_handler.dht_store_value(self.key, my_string)
-            return df
-
-        def done(val):
-            outer_df.callback(val)
-
-        if self.key is None:
-            self.key = self.__get_key()
-            df.addCallback(save_my_tuple)
-
-        df.addCallback(save_value)
-        df.addCallback(done)
-        df.callback(None)
-
-        return outer_df
+        my_hash = {
+            'name': self.name,
+            'vector': self.vector,
+            'type': 'tag'
+        }
+        df = self._save(my_hash)
+        return df
 
 
-class PluginOutput(ad3.models.abstract.PluginOutput):
+class PluginOutput(ad3.models.abstract.PluginOutput, SaveableModel):
     """
     Object to represent the output of a plugin
 
@@ -519,10 +499,11 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
         self.audio_key = audio_key
         self.key = key
 
-    def __get_key(self):
+    def _get_key(self):
         return _network_handler.hash_function("plugin_output_"+str(self.vector))
 
     def save(self):
+        # We've got a bunch of stuff to do. Don't call __save(), just do it.
         outer_df = defer.Deferred()
         df = defer.Deferred()
 
@@ -560,7 +541,7 @@ class PluginOutput(ad3.models.abstract.PluginOutput):
 
 
         if self.key is None:
-            self.key = self.__get_key()
+            self.key = self._get_key()
             # chain our tuple saving procedures, so they don't happen at the same time
             df.addCallback(save_my_tuple)
             df.addCallback(save_plugin_tuple)
@@ -592,9 +573,9 @@ def get_tags(callback, name = None, audio_file = None, guessed_file = None):
     """
     search_tuples = [ ("tag", None, name) ]
     if audio_file is not None:
-        search_tuples.append( ("tag", None, "audio_file", audio_file.key) )
+        search_tuples.append( ("tag", None, "audio_file", audio_file.get_key()) )
     if guessed_file is not None:
-        search_tuples.append( ("tag", None, "guessed_file", guessed_file.key) )
+        search_tuples.append( ("tag", None, "guessed_file", guessed_file.get_key()) )
 
     return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
@@ -610,11 +591,11 @@ def get_tag(callback, name):
 
 def get_plugin_outputs(callback, audio_file=None, plugin=None):
     if audio_file is not None:
-        audio_key = audio_file.key
+        audio_key = audio_file.get_key()
     else:
         audio_key = None
     if plugin is not None:
-        plugin_key = plugin.key
+        plugin_key = plugin.get_key()
     else:
         plugin_key = None
 
@@ -622,7 +603,7 @@ def get_plugin_outputs(callback, audio_file=None, plugin=None):
     return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugin_output(callback, audio_file, plugin):
-    search_tuples = [ ("plugin_output", None, plugin.key, audio_file.key) ]
+    search_tuples = [ ("plugin_output", None, plugin.get_key(), audio_file.get_key()) ]
     return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugins(callback, name = None, module_name = None, plugin_output = None):
@@ -643,7 +624,7 @@ def get_plugins(callback, name = None, module_name = None, plugin_output = None)
     """
     search_tuples = [ ("plugin", None, name, module_name) ]
     if plugin_output is not None:
-        search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
+        search_tuples.append( ("plugin", None, "plugin_output", plugin_output.get_key()) )
     return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
 def get_plugin(callback, name = None, module_name = None, plugin_output = None):
@@ -663,7 +644,7 @@ def get_plugin(callback, name = None, module_name = None, plugin_output = None):
     """
     search_tuples = [ ("plugin", None, name, module_name) ]
     if plugin_output is not None:
-        search_tuples.append( ("plugin", None, "plugin_output", plugin_output.key) )
+        search_tuples.append( ("plugin", None, "plugin_output", plugin_output.get_key()) )
     return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
 def get_audio_files(callback, file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
@@ -690,11 +671,11 @@ def get_audio_files(callback, file_name=None, user_name=None, tag=None, guessed_
     """
     search_tuples = [ ("audio_file", None, file_name, user_name) ]
     if tag is not None:
-        search_tuples.append( ("audio_file", None, "tag", tag.key) )
+        search_tuples.append( ("audio_file", None, "tag", tag.get_key()) )
     if guessed_tag is not None:
-        search_tuples.append( ("audio_file", None, "guessed_tag", guessed_tag.key) )
+        search_tuples.append( ("audio_file", None, "guessed_tag", guessed_tag.get_key()) )
     if plugin_output is not None:
-        search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.key) )
+        search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.get_key()) )
 
     return _network_handler.get_objects_matching_tuples(search_tuples, callback)
 
@@ -722,11 +703,11 @@ def get_audio_file(callback, file_name=None, user_name=None, tag=None, guessed_t
     """
     search_tuples = [ ("audio_file", None, file_name, user_name) ]
     if tag is not None:
-        search_tuples.append( ("audio_file", None, "tag", tag.key) )
+        search_tuples.append( ("audio_file", None, "tag", tag.get_key()) )
     if guessed_tag is not None:
-        search_tuples.append( ("audio_file", None, "guessed_tag", guessed_tag.key) )
+        search_tuples.append( ("audio_file", None, "guessed_tag", guessed_tag.get_key()) )
     if plugin_output is not None:
-        search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.key) )
+        search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.get_key()) )
 
     return _network_handler.get_object_matching_tuples(search_tuples, callback)
 
@@ -770,18 +751,14 @@ def update_vector(plugin, audio_file):
     outer_df = defer.Deferred()
     poll_cb = None
 
-    audio_key = audio_file.key
-
-    if audio_key is None:
-        # if the file hasn't been saved yet, audio_file.key won't be set
-        audio_key = audio_file.unsaved_key()
+    audio_key = audio_file.get_key()
 
     def done(val):
         print "Plugin Output Created and Saved. Calling back now.", val
         outer_df.callback(None)
 
     def save_plugin_output(vector):
-        po = PluginOutput(vector, plugin.key, audio_key)
+        po = PluginOutput(vector, plugin.get_key(), audio_key)
         df = save(po)
         df.addCallback(done)
         return df
@@ -857,8 +834,8 @@ def initialize_storage(callback):
     pass
 
 def apply_tag_to_file(audio_file, tag):
-    tag_tuple = ("tag", tag.key, "audio_file", audio_file.key)
-    audio_tuple = ("audio_file", audio_file.key, "tag", tag.key)
+    tag_tuple = ("tag", tag.get_key(), "audio_file", audio_file.get_key())
+    audio_tuple = ("audio_file", audio_file.get_key(), "tag", tag.get_key())
 
     #print "APPLYING TAG TO FILE:", tag
 
@@ -906,8 +883,8 @@ def remove_guessed_tags():
 def guess_tag_for_file(audio_file, tag):
     outer_df = defer.Deferred()
 
-    tag_tuple = ("tag", tag.key, "guessed_file", audio_file.key)
-    audio_tuple = ("audio_file", audio_file.key, "guessed_tag", tag.key)
+    tag_tuple = ("tag", tag.get_key(), "guessed_file", audio_file.get_key())
+    audio_tuple = ("audio_file", audio_file.get_key(), "guessed_tag", tag.get_key())
 
     def save_tag_tuple(val):
        df = _network_handler.dht_store_tuple(tag_tuple)
