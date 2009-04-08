@@ -177,12 +177,12 @@ class MyMenu(wx.Frame):
         def file_added(result):
             (file, added) = result
             if added:
-                print "--->", "added", file, file.key.encode('hex')
+                print "--->", "added", file, file.get_key().encode('hex')
                 return "file_added"
             else:
-                print "--->", "file already exists:", file, file.key.encode('hex')
+                print "--->", "file already exists:", file, file.get_key().encode('hex')
                 return "file_added_false"
-            print "--->", "added", file, file.key.encode('hex')
+            print "--->", "added", file, file.get_key().encode('hex')
 
         def add_file(file_name, tags):
             add_df = self.controller.add_file(file_added, file_name, user_name=user_name, tags=tags)
@@ -237,19 +237,17 @@ class MyMenu(wx.Frame):
 #            ('centroid', 'ad3.analysis_plugins.centroid_plugin')
         ]
 
-        df = defer.Deferred()
-
         def file_added(result):
             (file, added) = result
             if added:
-                print "--->", "added", file, file.key.encode('hex')
+                print "--->", "added", file, file.get_key().encode('hex')
                 return "file_added"
             else:
-                print "--->", "file already exists:", file, file.key.encode('hex')
+                print "--->", "file already exists:", file, file.get_key().encode('hex')
                 return "file_added_false"
 
         def plugin_added(plugin):
-            print "--->", "added", plugin, plugin.key.encode('hex')
+            print "--->", "added", plugin, plugin.get_key().encode('hex')
             return "plugin_added"
 
         def add_file(val, file_name, tags):
@@ -264,6 +262,8 @@ class MyMenu(wx.Frame):
         def add_plugin(val, name, module_name):
             p_df = self.controller.add_plugin(plugin_added, name, module_name)
             return p_df
+
+        df = defer.Deferred()
 
         # add callbacks for adding plugins
         for (name, module_name) in plugins:
