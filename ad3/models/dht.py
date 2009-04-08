@@ -313,7 +313,7 @@ class NetworkHandler(object):
                 sanitized.append(t.encode('base64'))
         key = simplejson.dumps(sanitized)
 
-        lifetime = int(time()) + 10
+        lifetime = int(time()) - 10
         self._cache[key] = (lifetime, result_tuples)
 
 _network_handler = None
