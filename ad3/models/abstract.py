@@ -28,7 +28,7 @@ class Plugin(object):
                 self.__dict__["module"] = mod
             return self.__dict__["module"]
         else:
-            return object.__getattr__(name)
+            raise AttributeError(name)
 
 
     def __repr__(self):
