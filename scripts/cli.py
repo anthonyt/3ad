@@ -9,6 +9,7 @@ import termios
 import keyword
 import __builtin__
 
+from time import sleep
 from functools import partial
 from IPython.completer import Completer
 
@@ -17,7 +18,9 @@ from twisted.internet import reactor
 from twisted.internet import defer
 from twisted.internet import stdio
 from twisted.conch.insults.insults import ServerProtocol
-from twisted.conch.manhole import Manhole
+from twisted.conch.manhole import Manhole, ColoredManhole, ManholeInterpreter
+
+from entangled.kademlia.datastore import SQLiteDataStore
 
 # ensure the main ad3 module is on the path
 parent_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -36,20 +39,69 @@ from ad3.controller import Controller
 
 defer.setDebugging(True)
 
-class ConsoleManhole(Manhole):
+class ConsoleManholeInterpreter(ManholeInterpreter):
+    def displayhook(self, obj):
+        ManholeInterpreter.displayhook(self, obj)
+        if isinstance(obj, defer.Deferred):
+            # If we need custom handling for displaying deferreds, add it here
+            pass
+
+    def runcode(self, *a, **kw):
+        ManholeInterpreter.runcode(self, *a, **kw)
+
+
+class ConsoleManhole(ColoredManhole):
+    """
+    Adapted from this awesome mailing list entry:
+    http://twistedmatrix.com/pipermail/twisted-python/2009-January/019003.html
+    """
+    maxRun = 1
+
     def __init__(self, namespace=None):
-        Manhole.__init__(self, namespace)
+        ColoredManhole.__init__(self, namespace)
         self.completer = Completer(namespace=self.namespace)
         self.completeState = 0
         self.lastTabbed = ''
         self.lastSuggested = ''
+        self.sem = defer.DeferredSemaphore(self.maxRun)
+        self.enabled = True
 
     def connectionLost(self, reason):
         ColoredManhole.connectionLost(self, reason)
         reactor.stop()
+        print ""
 
     def connectionMade(self):
-        Manhole.connectionMade(self)
+        ColoredManhole.connectionMade(self)
+        self.interpreter = ConsoleManholeInterpreter(self, self.namespace)
+
+    def disableInput(self):
+        print "Disabling\r"
+        self.enabled = False
+
+    def enableInput(self):
+        print "Enabling\r"
+        self.enabled = True
+
+    def lineReceived(self, line):
+        print "\r"
+        def fn():
+            df = defer.Deferred()
+            def fn2():
+                print "Running lineReceived\r"
+                a = ColoredManhole.lineReceived(self, line)
+                df.callback(a)
+
+            reactor.callLater(0, fn2)
+            return df
+
+        self.sem.run(fn)
+
+    def keystrokeReceived(self, keyID, modifier):
+        if keyID in self.keyHandlers or self.enabled:
+            ColoredManhole.keystrokeReceived(self, keyID, modifier)
+        else:
+            print "ignoring\r"
 
     def handle_TAB(self):
         s = "".join(self.lineBuffer)
@@ -90,8 +142,46 @@ class ConsoleManhole(Manhole):
             self.lineBufferIndex += len(ch)
             self.terminal.write(ch)
 
+# DECORATORS
+def cont(fn):
+    def f(*a, **kw):
+        if not isinstance(p.terminalProtocol.namespace['controller'], Controller):
+            print "Please connect first\r"
+            print "see help(connect) for details\r"
+            return None
+        else:
+            return fn(*a, **kw)
+    return f
 
-def connect(udpPort=None, userName=None, knownNodes=None):
+def sync(fn):
+    def s(*a, **kw):
+        def f(v):
+            p.terminalProtocol.namespace['_result'] = v
+            p.terminalProtocol.enableInput()
+            return v
+        p.terminalProtocol.disableInput()
+        try:
+            df = fn(*a, **kw)
+            if isinstance(df, defer.Deferred):
+                df.addBoth(f)
+            else:
+                f(df)
+            return df
+        except Exception, e:
+            p.terminalProtocol.enableInput()
+            raise e
+    return s
+
+def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
+    """
+    udpPort: int
+    userName: str
+    knownNodes: list of tuples in form [('127.0.0.1', 4000)]
+    dbFile: path to sqlite database file
+
+    udpPort will be read from first command line argument, if None
+    userName will be read from second command line argument, if None
+    """
 
     if udpPort is None:
         udpPort = int(sys.argv[1])
@@ -101,8 +191,9 @@ def connect(udpPort=None, userName=None, knownNodes=None):
         knownNodes = [('127.0.0.1', 4000)]
 
     # Set up model with its network node
-    model = ad3.models.dht,
-    node = ad3.models.dht.MyNode(udpPort=udpPort)
+    model = ad3.models.dht
+    dataStore = SQLiteDataStore(dbFile=dbFile)
+    node = ad3.models.dht.MyNode(udpPort=udpPort, dataStore=dataStore)
     print "->", "joining network..."
     node.joinNetwork(knownNodes)
     print "->", "joined network..."
@@ -117,12 +208,82 @@ def connect(udpPort=None, userName=None, knownNodes=None):
     # Set up the controller
     controller = Controller(model, gaussian)
 
+    p.terminalProtocol.namespace['controller'] = controller
+    p.terminalProtocol.namespace['userName'] = userName
+
     return controller
 
+"""
+    need to:
+        add file (path) -> file
+        add file (path, tag) -> file
+        add file (path, tag list) -> file
+
+        add files (path list) -> file list
+        add files (path list, tag) -> file list
+        add files (path list, tag list) -> file list
+
+        list files -> file list
+        list files (path fragment) -> file list
+        list files (tag name) -> file list
+
+        list tags -> tag list
+        list tags (tag fragment) -> tag list
+
+        print file (file) -> void
+        print files (file list) -> void
+
+        update tag vectors -> void
+        update guessed tags -> void
+
+        save to database (filename) -> void
+        retrieve from database (filename) -> void
+"""
+
+
+@sync
+@cont
+def add_file(path):
+    n = p.terminalProtocol.namespace
+    def f(v):
+        return v
+    df = n['controller'].add_file(f, path, user_name=n['userName'], tags=None)
+    return df
+
+@sync
+@cont
+def get_files():
+    n = p.terminalProtocol.namespace
+    df = defer.Deferred()
+    def f(v):
+        print "AR", v
+        df.callback(v)
+    n['controller'].model.get_audio_files(f, user_name=n['userName'])
+    return df
+
+
+def pr(a):
+    """
+    testing function. performs a print, but returns a deferred.
+    """
+    df = defer.Deferred()
+    def f():
+        print str(a) + "\r"
+        df.callback(a)
+    reactor.callLater(4, f)
+    return df
+
+
 namespace = dict(
+    pr = pr,
+    sync = sync,
+    add_file=add_file,
+    get_files=get_files,
     __name__ = '__console__',
     __doc__ = None,
-    connect = connect
+    _result = None,
+    connect = connect,
+    controller = None
 )
 
 fd = sys.__stdin__.fileno()
