@@ -150,6 +150,7 @@ def cont(fn):
             return None
         else:
             return fn(*a, **kw)
+    f.__doc__ = fn.__doc__
     return f
 
 def sync(fn):
@@ -169,6 +170,7 @@ def sync(fn):
         except Exception, e:
             p.terminalProtocol.enableInput()
             raise e
+    s.__doc__ = fn.__doc__
     return s
 
 def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
@@ -242,23 +244,65 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
 
 @sync
 @cont
-def add_file(path):
+def add_file(path, tags=None):
+    """
+    @param path: path to audio file (wav, aif, mp3)
+    @type  path: str or unicode
+
+    @param tags: list of tags to apply to the file
+    @type  tags: str, Tag object, or list of str/Tag objects
+    """
+    # Make sure tags is a list of tag names.
+    if tags is not None:
+        if not isinstance(tags, list):
+            tags = [tags]
+        def f(t):
+            if isinstance(t, Tag):
+                return t.name
+            else:
+                return t
+        tags = map(f, tags)
+
+
     n = p.terminalProtocol.namespace
     def f(v):
         return v
-    df = n['controller'].add_file(f, path, user_name=n['userName'], tags=None)
+    df = n['controller'].add_file(f, path, user_name=n['userName'], tags=tags)
     return df
 
 @sync
 @cont
-def get_files():
+def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginOutput=None):
+    """
+    @param fileName: if provided, returns only files with a matching file name
+    @type  fileName: unicode
+
+    @param userName: if provided, returns only files with a matching user name
+    @type  userName: unicode
+
+    @param tags: if provided, returns only files manually tagged with the provided tag
+    @type  tags: Tag object
+
+    @param guessedTags: if provided, returns only files automatically tagged with the provided tag
+    @type  guessedTags: Tag object
+
+    @param pluginOutput: if provided, returns only the file associated with this output
+    @type  pluginOutput: PluginOutput object
+    """
     n = p.terminalProtocol.namespace
     df = defer.Deferred()
+
+    if userName is None:
+        userName = n['userName']
+    if userName is '':
+        username = None
+
     def f(v):
         print "AR", v
         df.callback(v)
-    n['controller'].model.get_audio_files(f, user_name=n['userName'])
+    n['controller'].model.get_audio_files(f, file_name=fileName, user_name=userName, tag=tags, guessed_tag=guessedTags, plugin_output=pluginOutput)
     return df
+
 
 
 def pr(a):
