@@ -296,8 +296,7 @@ def add_files(paths, tags=None):
 
     return outer_df
 
-
-
+@cont
 def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginOutput=None):
     """
     @param fileName: if provided, returns only files with a matching file name
@@ -328,6 +327,7 @@ def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginO
     n['controller'].model.get_audio_files(f, file_name=fileName, user_name=userName, tag=tags, guessed_tag=guessedTags, plugin_output=pluginOutput)
     return df
 
+@cont
 def get_tags(name=None, audioFile=None, guessedAudioFile=None):
     """
     @param name: return only tags with tag.name matching provided name
@@ -347,6 +347,7 @@ def get_tags(name=None, audioFile=None, guessedAudioFile=None):
     n['controller'].model.get_tags(f, name=name, audio_file=audioFile, guessed_file=guessedAudioFile)
     return df
 
+@cont
 def print_file(file):
     """
     @param file: the file to be printed
@@ -390,29 +391,98 @@ def print_files(files):
     dl = defer.DeferredList(df_list)
     return dl
 
-
-def pr(a):
+@sync
+@cont
+def update_tag_vectors():
     """
-    testing function. performs a print, but returns a deferred.
+    Update the vectors for all tags based on the vectors for all files with each tag.
     """
+    n = p.terminalProtocol.namespace
     df = defer.Deferred()
-    def f():
-        print str(a) + "\r"
-        df.callback(a)
-    reactor.callLater(4, f)
+
+    def f(v):
+        df.callback(v)
+    n['controller'].update_tag_vectors(f)
     return df
 
+@sync
+@cont
+def update_file_vector(file):
+    """
+    @param file: the file for which we will update the vectors
+    @type  file: AudioFile object
+    """
+    n = p.terminalProtocol.namespace
+    df = n['controller'].create_vectors(file)
+    return df
+
+@sync
+@cont
+def update_predictions():
+    """
+    Update all predicted tags.
+    """
+    n = p.terminalProtocol.namespace
+    df = defer.Deferred()
+
+    def f(v):
+        df.callback(v)
+    n['controller'].guess_tags(f, user_name=n['userName'])
+    return df
+
+@cont
+def create_db_snapshot(outFile):
+    """
+    @param outFile: the path to save the database to
+    @type  outFile: str
+
+    thanks to: http://osdir.com/ml/python.db.pysqlite.user/2006-01/msg00022.html
+    """
+    n = p.terminalProtocol.namespace
+    ds = n['controller'].model._network_handler.node._dataStore
+    cur = ds._cursor
+    con = ds._db
+    columns = [
+        'key',
+        'value',
+        'lastPublished',
+        'originallyPublished',
+        'originalPublisherID'
+    ]
+    col_str = ', '.join(columns)
+
+    # Detatch the current backup database, if there is one
+    try:
+        cur.execute('DETACH backup')
+    except Exception, e:
+        pass
+    finally:
+        con.commit()
+
+    # erase the old db file, if it exists
+    if os.path.exists(outFile):
+        os.remove(outFile)
+
+    # Create a new DB file, copying over the current state.
+    cur.execute('ATTACH \'%s\' AS backup' % outFile)
+    cur.execute('CREATE TABLE backup.data(%s)' % col_str)
+    cur.execute('INSERT INTO backup.data(%s) SELECT %s FROM data' % (col_str, col_str))
+    con.commit()
 
 namespace = dict(
-    pr = pr,
     test_conn = partial(connect, 4000, 'anthony', dbFile='bob.sqlite'),
     sync = sync,
     add_file=add_file,
     add_files=add_files,
-    get_files=sync(cont(get_files)),
-    get_tags=sync(cont(get_tags)),
-    print_file=sync(cont(print_file)),
+    get_files=sync(get_files),
+    get_tags=sync(get_tags),
+    print_file=sync(print_file),
     print_files=print_files,
+    update_tag_vectors=update_tag_vectors,
+    update_file_vector=update_file_vector,
+    update_predictions=update_predictions,
+    create_db_snapshot=create_db_snapshot,
+
     __name__ = '__console__',
     __doc__ = None,
     _result = None,
