@@ -73,19 +73,19 @@ class ConsoleManhole(ColoredManhole):
         self.interpreter = ConsoleManholeInterpreter(self, self.namespace)
 
     def disableInput(self):
-        print "Disabling\r"
+        #print "Disabling\r"
         self.enabled = False
 
     def enableInput(self):
-        print "Enabling\r"
+        #print "Enabling\r"
         self.enabled = True
 
     def lineReceived(self, line):
-        print "\r"
+        #print "\r"
         def fn():
             df = defer.Deferred()
             def fn2():
-                print "Running lineReceived\r"
+                #print "Running lineReceived\r"
                 a = ColoredManhole.lineReceived(self, line)
                 df.callback(a)
 
@@ -98,7 +98,8 @@ class ConsoleManhole(ColoredManhole):
         if keyID in self.keyHandlers or self.enabled:
             ColoredManhole.keystrokeReceived(self, keyID, modifier)
         else:
-            print "ignoring\r"
+            #print "ignoring\r"
+            pass
 
     def handle_TAB(self):
         s = "".join(self.lineBuffer)
@@ -193,9 +194,9 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
     model = ad3.models.dht
     dataStore = SQLiteDataStore(dbFile=dbFile)
     node = ad3.models.dht.MyNode(udpPort=udpPort, dataStore=dataStore)
-    print "->", "joining network..."
+    #print "->", "joining network..."
     node.joinNetwork(knownNodes)
-    print "->", "joined network..."
+    #print "->", "joined network..."
     # create a newtwork handler using the network node
     nh = ad3.models.dht.NetworkHandler(node)
     # Set the network handler for the model.

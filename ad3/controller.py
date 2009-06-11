@@ -6,6 +6,8 @@ from twisted.internet import defer
 from functools import partial
 from sets import Set
 
+from logs import logger
+
 class TagAggregator(object):
     """
     class to facilitate getting a list of tag objects from a list of tag names
@@ -76,7 +78,7 @@ class FileAggregator(object):
             files = None
             for tag_name in self.file_lists:
                 if files is None:
-                    #print self.file_lists[tag_name]
+                    logger.debug(self.file_lists[tag_name])
                     files = Set(self.file_lists[tag_name])
                 else:
                     files = files.intersection(self.file_lists[tag_name])
@@ -128,7 +130,7 @@ class Controller(object):
             def got_vector(tag, vector):
                 tag.vector = vector
                 def save_tag(val):
-                    #print "->", "Saving vector for", tag
+                    logger.debug("-> Saving vector for %r", tag)
                     s_df = self.model.save(tag)
                     return s_df
 
@@ -141,7 +143,7 @@ class Controller(object):
 
             for tag in tags:
                 def get_vector(val, tag):
-                    #print "->", "Fetching vector for", tag
+                    logger.debug("-> Fetching vector for %r", tag)
                     cb = partial(got_vector, tag)
                     t_df = self.mine.calculate_tag_vector(cb, tag)
                     return t_df
@@ -171,7 +173,7 @@ class Controller(object):
         def got_plugins(plugins):
             deferreds = []
             for plugin in plugins:
-                #print "->", "Creating vector for", file, plugin
+                logger.debug("-> Creating vector for %r %r", file, plugin)
                 df = self.model.update_vector(plugin, file)
                 deferreds.append(df)
 
@@ -198,7 +200,7 @@ class Controller(object):
             for file in files:
                 for tag in tags:
                     if self.mine.does_tag_match(file, tag):
-                        #print "->", "GENERATED: ", file, tag
+                        logger.debug("-> GENERATED: %r %r", file, tag)
                         df.addCallback(guess_tag, file, tag)
 
             df.addCallback(outer_df.callback)
@@ -233,7 +235,7 @@ class Controller(object):
         result_tuples = {}
 
         def done(val):
-            print "Calling back outer_df with", result_tuples
+            logger.debug("Calling back outer_df with %r", result_tuples)
             outer_df.callback(result_tuples)
 
         if tags is None:
@@ -251,16 +253,16 @@ class Controller(object):
                 result_tuples[file_name] = (file, True)
 
                 def save_file(val):
-                    print "--> Saving", file_name
+                    logger.debug("--> Saving %r", file_name)
                     if last_one:
-                        print "--------- lastone callback'd!"
+                        logger.debug("--------- lastone callback'd!")
                         file_save_df.addCallback(done)
 
                     save_df = self.model.save(file)
                     return save_df
 
                 def apply_vector(vector):
-                    print "--> Applying vector to ", file_name, vector
+                    logger.debug("--> Applying vector to %r %r", file_name, vector)
                     file.vector = vector
 
                     # return a reference to the save_file function
@@ -274,7 +276,7 @@ class Controller(object):
                 if len(tags) > 0:
                     def got_tags(tags):
                         def apply(value, file, tag):
-                            print "Attempting to apply:", tag, "to", file
+                            logger.debug("Attempting to apply: %r to %r ", tag, file)
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
@@ -296,10 +298,11 @@ class Controller(object):
             num_got[0] += 1
 
             if last_one:
-                print "--> LAST ONE! num_got =", num_got[0]
+                logger.debug("--> LAST ONE! num_got = %r", num_got[0])
+                pass
 
         for file_name in file_names:
-            print "Getting audio file..."
+            logger.debug("Getting audio file...")
             self.model.get_audio_file(partial(got_file, file_name), file_name=file_name, user_name=user_name)
 
         return outer_df
@@ -324,7 +327,7 @@ class Controller(object):
                     return save_df
 
                 def lmk(vector):
-                    print "LETTING YOU KNOW THAT VECTORS HAVE BEEN CREATED"
+                    logger.debug("LETTING YOU KNOW THAT VECTORS HAVE BEEN CREATED")
                     return vector
 
                 def done(val):
@@ -339,7 +342,7 @@ class Controller(object):
                 else:
                     def got_tags(tags):
                         def apply(value, file, tag):
-                            #print "Attempting to apply:", tag
+                            logger.debug("Attempting to apply: %r", tag)
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
@@ -362,8 +365,6 @@ class Controller(object):
                 # and signal outer_df as being completed.
                 outer_df.callback((file, False))
 
-
-        #print "\n"
         self.model.get_audio_file(got_file, file_name=file_name, user_name=user_name)
         return outer_df
 
