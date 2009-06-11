@@ -110,12 +110,9 @@ def train(data):
 
     # Start setting up our MarSystems
     rv = mng.create("RealvecSource", "rv")
-    cl = mng.create("Classifier", "cl")
+    cl = mng.create("GaussianClassifier", "cl")
     net.addMarSystem(rv)
     net.addMarSystem(cl)
-
-    # Set up the appropriate classifier
-    net.updControl('Classifier/cl/mrs_string/enableChild', fstr('GaussianClassifier/gaussiancl'))
 
     # Set up the number of input samples to the system.
     # Don't know what this is for but we need it.
@@ -179,6 +176,8 @@ def predict(data, classifier_string):
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
         output = net.getControl("mrs_realvec/processedData").to_realvec()
+        distances = net.getControl("mrs_realvec/classProbabilities").to_realvec()
+        print "DISTANCES", array(distances)
         distance = output[2]
         guesses.append(distance)
 
