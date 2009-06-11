@@ -2,6 +2,8 @@ from numpy import mean, array, dot, sqrt, subtract, zeros, copy
 from twisted.internet import defer
 from marsyas import *
 import zlib
+from .. import logs
+logger = logs.logger
 
 class Gaussian(object):
     def __init__(self, data_model, tolerable_distance = 100):
@@ -24,7 +26,7 @@ class Gaussian(object):
 
 
     def calculate_file_vector(self, file):
-        print "Calculating File Vector!"
+        logger.debug("Calculating File Vector!")
         outer_df = defer.Deferred()
 
         def got_outputs(plugin_outputs):
@@ -41,7 +43,7 @@ class Gaussian(object):
     def does_tag_match(self, file, tag):
         data = [file.vector]
         distances = predict(data, tag.vector)
-        print "DISTANCE:", distances[0], file, tag
+        logger.debug("DISTANCE: %r %r %r", distances[0], file, tag)
         return (distances[0] <= self.tolerance)
 
 
@@ -177,7 +179,7 @@ def predict(data, classifier_string):
         net.tick()
         output = net.getControl("mrs_realvec/processedData").to_realvec()
         distances = net.getControl("mrs_realvec/classProbabilities").to_realvec()
-        print "DISTANCES", array(distances)
+        logger.debug("DISTANCES %r", array(distances))
         distance = output[2]
         guesses.append(distance)
 

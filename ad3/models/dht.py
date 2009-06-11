@@ -17,6 +17,8 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
 from functools import partial
+from .. import logs
+logger = logs.logger
 
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
@@ -84,7 +86,7 @@ class ObjectAggregator(object):
 
         # for each key, run our got_value function on the value row
         for key in self.key_list:
-#            #print "->", "Searching for key..", key.encode('hex')
+#            logger.debug("-> Searching for key.. %r", key.encode('hex'))
             o = self.net_handler.cache_get_obj(key)
             if o is not None:
                 self.objects.append(o)
@@ -102,7 +104,7 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        print "->", "OBJ FROM ROW", row
+        logger.debug("-> OBJ FROM ROW %r", row)
         h = simplejson.loads(row)
 
         if h['type'] == "plugin":
@@ -127,7 +129,7 @@ class NetworkHandler(object):
 
 
     def hash_function(self, plain_key):
-        #print "->", "Generating a hash for", plain_key
+        logger.debug("-> Generating a hash for %r", plain_key)
         h = hashlib.sha1()
         h.update(plain_key)
         return h.digest()
@@ -142,7 +144,7 @@ class NetworkHandler(object):
                 return None
 
         def error(failure):
-            print "->", 'An error occurred:', failure.getErrorMessage()
+            logger.debug("-> An error occurred: %s", failure.getErrorMessage())
             callback(None)
 
         df = self.node.iterativeFindValue(key)
@@ -156,10 +158,10 @@ class NetworkHandler(object):
 
     def dht_store_value(self, key, value):
         def success(result):
-            #print "->", 'stored value:', result
+            logger.debug("-> stored value: %r", result)
             return result
 
-        #print "->", "Attempting to store value", key.encode('hex'), "=>", value
+        logger.debug("-> Attempting to store value %s => %r", key.encode('hex'), value)
         df = self.node.iterativeStore(key, value)
         df.addCallback(success)
         return df
@@ -170,14 +172,14 @@ class NetworkHandler(object):
             """
             @type result  tuple or None
             """
-            print "SUCCESS? ->", result
+            logger.debug("SUCCESS? -> %r", result)
             callback(result)
 
         def error(failure):
-            print "->", 'an error occurred:', failure.getErrorMessage()
+            logger.debug("-> an error occurred: %s", failure.getErrorMessage())
             callback(None)
 
-#        #print "->", "searching for tuples based on", dTuple
+#        logger.debug("-> searching for tuples based on %r", dTuple)
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -206,13 +208,14 @@ class NetworkHandler(object):
 
     def dht_store_tuple(self, dTuple):
         def success(result):
-            #print "->", 'stored tuple:', result
+            logger.debug("-> stored tuple: %r", result)
             return result
 
         def error(failure):
-            print "->", 'an error occurred:', failure.getErrorMessage()
+            logger.debug("-> an error occurred: %s", failure.getErrorMessage())
+            pass
 
-        #print "->", "Attempting to store tuple:", dTuple
+        logger.debug("-> Attempting to store tuple: %r", dTuple)
         df = self.node.put(dTuple, trackUsage=False)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -228,16 +231,16 @@ class NetworkHandler(object):
         """
         def got_keys(keys):
             if len(keys) == 0:
-                #print "->", "KA object found nothing."
+                logger.debug("-> KA object found nothing.")
                 callback([])
             else:
                 # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
-                #print "->", "KA object found", len(keys), "keys. Making a OA object with key list."
+                logger.debug("-> KA object found %d keys. Making a OA object with key list.", len(keys))
                 ta = ObjectAggregator(self, keys)
                 ta.go(callback)
 
-        #print "->", "Making a KA object with tuple list:", tuple_list
+        logger.debug("-> Making a KA object with tuple list: %r", tuple_list)
         ka = KeyAggregator(self, tuple_list)
         ka.go(got_keys)
 
@@ -266,7 +269,7 @@ class NetworkHandler(object):
         if key in self._cache:
             entry = self._cache[key]
             if int(time()) < entry[0]:
-                print "-> Fetching object from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
+                logger.debug("-> Fetching object from the cache %r TTL: %d s", entry[1], int(time()) - entry[0])
                 return entry[1]
 
         return None
@@ -296,7 +299,7 @@ class NetworkHandler(object):
         if key in self._cache:
             entry = self._cache[key]
             if int(time()) < entry[0]:
-                print "-> Fetching tuple from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
+                logger.debug("-> Fetching object from the cache %r TTL: %d s", entry[1], int(time()) - entry[0])
                 return entry[1]
 
         return None
@@ -327,12 +330,12 @@ def set_network_handler(obj):
     should be an instance of the network handler class above
     will be used by all functions below
     """
-    print "->", "setting network handler!", obj
+    logger.debug("-> setting network handler! %r", obj)
     global _network_handler
     _network_handler = obj
 
     def do_nothing(val):
-        print "Doing nothing!"
+        logger.debug("Doing nothing!")
         return val
 
     _dht_df.addCallback(do_nothing)
@@ -719,7 +722,7 @@ def save(obj):
     @param obj: the object to save
     @type  obj: Saveable
     """
-    #print "->", "saving object...", obj
+    logger.debug("-> saving object... %r", obj)
     df = obj.save()
     return df
 
@@ -733,7 +736,7 @@ def update_vector(plugin, audio_file):
     @param audio_file: the audio file to run the plugin on
     @type  audio_file: AudioFile
     """
-    print "------\n -> Beginning update vector"
+    logger.debug("------\n -> Beginning update vector")
 
     # list to store the contact we offloaded to
     # sendOffloadCommand() method updates its value
@@ -755,7 +758,7 @@ def update_vector(plugin, audio_file):
     audio_key = audio_file.get_key()
 
     def done(val):
-        print "Plugin Output Created and Saved. Calling back now.", val
+        logger.debug("Plugin Output Created and Saved. Calling back now. %r", val)
         outer_df.callback(None)
 
     def save_plugin_output(vector):
@@ -765,7 +768,7 @@ def update_vector(plugin, audio_file):
         return df
 
     def calculate_vector_yourself(val):
-        print "Calculating the damned vector myself"
+        logger.debug("Calculating the damned vector myself")
         # Make blocking function "plugin.create_vector" nonblocking
         # by deferring it to its own thread!
         fname = str(audio_file.file_name)
@@ -774,19 +777,19 @@ def update_vector(plugin, audio_file):
         return df
 
     def error(failure):
-        print "Error getting vector from contact. MSG: ", failure.getErrorMessage()
+        logger.debug("Error getting vector from contact. MSG: %s", failure.getErrorMessage())
         df = calculate_vector_yourself(None)
         return df
 
     def polled(val):
         if struct['failed']:
-            print "Poll failed"
+            logger.debug("Poll failed")
             df = calculate_vector_yourself(None)
         elif struct['complete'] and not struct['failed']:
-            print "Poll complete!"
+            logger.debug("Poll complete!")
             df = save_plugin_output(struct['vector'])
         else:
-            print "Poll unfinished. sheduling another one"
+            logger.debug("Poll unfinished. sheduling another one")
             # schedule another poll
             df_chain.addCallback(poll_cb)
         return val
@@ -794,14 +797,14 @@ def update_vector(plugin, audio_file):
     def poll(val):
         if struct['complete']:
             # we're through!
-            print "transaction complete!"
+            logger.debug("transaction complete!")
             return None
         elif int(time()) - struct['timestamp'] > 45:
             # timed out. just calculate it yourself
-            print "Transaction timed out. do it yourself."
+            logger.debug("Transaction timed out. do it yourself.")
             df = calculate_vector_yourself(None)
         else:
-            print "POLLING"
+            logger.debug("POLLING")
             # execute a poll and call the "polled" method when it's done
             df = _network_handler.node.pollOffloadedCalculation(audio_key, struct)
             df.addBoth(polled)
@@ -809,13 +812,13 @@ def update_vector(plugin, audio_file):
     poll_cb = partial(reactor.callLater, 10, poll)
 
     def request_accepted(contact):
-        print "REQUEST ACCEPTED!!"
+        logger.debug("REQUEST ACCEPTED!!")
         # start the polling loop here.
         df_chain.addCallback(poll_cb)
         df_chain.callback(None)
 
     def farm_out_vector_calculation():
-        print "Attempting to farm out vector calculation"
+        logger.debug("Attempting to farm out vector calculation")
         df = _network_handler.node.sendOffloadCommand(audio_key, struct)
         return df
 
@@ -827,7 +830,7 @@ def update_vector(plugin, audio_file):
     # if farming out calculation fails (eg. times out)
     df.addErrback(error)
 
-    print "-> returning update vector"
+    logger.debug("-> returning update vector")
     return outer_df
 
 def initialize_storage(callback):
@@ -841,7 +844,7 @@ def apply_tag_to_file(audio_file, tag):
     tag_tuple = ("tag", tag.get_key(), "audio_file", audio_file.get_key())
     audio_tuple = ("audio_file", audio_file.get_key(), "tag", tag.get_key())
 
-    #print "APPLYING TAG TO FILE:", tag
+    logger.debug("APPLYING TAG TO FILE: %r", tag)
 
     def save_tag_tuple(val):
         tag_df = _network_handler.dht_store_tuple(tag_tuple)
@@ -912,35 +915,35 @@ def guess_tag_for_file(audio_file, tag):
 
 class MyProtocol(entangled.kademlia.protocol.KademliaProtocol):
     def sendRPC(self, contact, method, args, rawResponse=False):
-        print "-->> myprotocol: sendRPC(", contact, ",", method
+        logger.debug("-->> myprotocol: sendRPC(%r, %s)", contact, method)
         outer_df = defer.Deferred()
 
         def error(failure):
-            print "myprotocol: ERROR", failure
+            logger.debug("myprotocol: ERROR %r", failure)
             outer_df.errback(failure)
             return failure
 
         def got_response(val):
-            print "myprotocol: GOT RESPONSE", val
+            logger.debug("myprotocol: GOT RESPONSE %r", val)
             outer_df.callback(val)
             return val
 
         def actually_send(val):
-            print "myprotocol: SENDING (", method, ",", args, ",", rawResponse,")"
+            logger.debug("myprotocol: SENDING (%s, %r, %r)", method, args, rawResponse)
             df = KademliaProtocol.sendRPC(self, contact, method, args, rawResponse)
             return df
 
         # the deferred returned by this is what _dht_df waits for
         # it should get called back as soon as we get a response message
         def handle_dfs(val):
-            print "<<---------->>"
-            print "myprotocol: HANDLING DFS"
+            logger.debug("<<---------->>")
+            logger.debug("myprotocol: HANDLING DFS")
             df = defer.Deferred()
             def done(val):
-                print "myprotocol: DONE"
+                logger.debug("myprotocol: DONE")
                 import time
                 time.sleep(0.1)
-                print "myprotocol: Continuing..."
+                logger.debug("myprotocol: Continuing...")
                 df.callback(None)
 
             inner_df = defer.Deferred()
@@ -956,7 +959,7 @@ class MyProtocol(entangled.kademlia.protocol.KademliaProtocol):
         _dht_df.addCallback(handle_dfs)
 
         # should get called back as soon as msg returns.
-        print "--<< myprotocol: RETURNING outer_df"
+        logger.debug("--<< myprotocol: RETURNING outer_df")
         return outer_df
 
 class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
@@ -969,7 +972,7 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
         def executeRPC(nodes):
             contact = random.choice(nodes)
-            print "SENDING RPC TO:", contact
+            logger.debug("SENDING RPC TO: %r", contact)
             struct['contact'] = contact
 
             df = contact.offload(key, value, self.id)
@@ -1001,13 +1004,13 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
     @rpcmethod
     def offload(self, key, value, originalPublisherID=None, **kwargs):
-        print "-------------"
+        logger.debug("-------------")
         hash = simplejson.loads(value)
 
         plugin_module = hash['module_name']
         file_uri = hash['file_uri']
         id = plugin_module + file_uri
-        print "RECEIVED AN OFFLOAD RPC!", file_uri, plugin_module
+        logger.debug("RECEIVED AN OFFLOAD RPC! %r %r", file_uri, plugin_module)
 
         if not hasattr(self, 'computations'):
             self.computations = {}
@@ -1023,11 +1026,11 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
             try:
                 plugin = Plugin('temp', plugin_module)
 
-                print "Downloading", file_uri
+                logger.debug("Downloading %s", file_uri)
                 (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
                 self.computations[id]['downloaded'] = True
 
-                print "Computing vector for", file_name
+                logger.debug("Computing vector for %s", file_name)
                 vector = plugin.create_vector(file_name)
                 if len(vector) == 0 or len([a for a in vector if a == 0]) == len(vector):
                     # Zero length vector or zeroed out vector is an indication that Marsyas choked.
@@ -1037,7 +1040,7 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
                 os.remove(file_name)
             except Exception:
-                print "Computation error :(", failure.getErrorMessage()
+                logger.debug("Computation error :( %s", failure.getErrorMessage())
                 self.computations[id]['complete'] = True
                 self.computations[id]['failed'] = True
             finally:
@@ -1047,7 +1050,7 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
         #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
         #file.write(value)
-        print "OFFLOAD FINISHED"
+        logger.debug("OFFLOAD FINISHED")
         return "OK"
 
     @rpcmethod
@@ -1059,15 +1062,15 @@ class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
 
         if not hasattr(self, 'computations') or not self.computations.has_key(id):
             # we've never heard of the requested offload operation. make something up!
-            print "Returning BS poll"
+            logger.debug("Returning BS poll")
             result = {'complete': True, 'vector': None, 'failed': True, 'downloaded': False}
         elif self.computations[id]['complete']:
             # we've finished the requested offload operation. remove if from the list and return it
-            print "Returning finished poll"
+            logger.debug("Returning finished poll")
             result = self.computations.pop(id)
         else:
             # we haven't finished the requested offload operation, but we have some data on it
-            print "Returning unfinished poll"
+            logger.debug("Returning unfinished poll")
             result = self.computations[id]
 
         return simplejson.dumps(result)

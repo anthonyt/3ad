@@ -1,5 +1,7 @@
 from numpy import mean, array, dot, sqrt, subtract, zeros, copy
 from twisted.internet import defer
+from .. import logs
+logger = logs.logger
 
 def euclidean_distance(a, b):
     """
@@ -45,7 +47,7 @@ class Euclidean(object):
 
     def does_tag_match(self, file, tag):
         distance = euclidean_distance(tag.vector, file.vector)
-        print "DISTANCE:", distance, file, tag
+        logger.debug("DISTANCE: %r %r %r", distance, file, tag)
         if distance <= self.tolerance:
             return True
         return False

@@ -37,6 +37,10 @@ from ad3.learning.gauss import Gaussian
 from ad3.learning.svm import SVM
 from ad3.controller import Controller
 
+import logging
+from entangled.kademlia import logs as kademlia_logs
+from ad3 import logs as ad3_logs
+
 defer.setDebugging(True)
 
 class ConsoleManholeInterpreter(ManholeInterpreter):
@@ -74,19 +78,19 @@ class ConsoleManhole(ColoredManhole):
         self.interpreter = ConsoleManholeInterpreter(self, self.namespace)
 
     def disableInput(self):
-        print "Disabling\r"
+        #print "Disabling\r"
         self.enabled = False
 
     def enableInput(self):
-        print "Enabling\r"
+        #print "Enabling\r"
         self.enabled = True
 
     def lineReceived(self, line):
-        print "\r"
+        #print "\r"
         def fn():
             df = defer.Deferred()
             def fn2():
-                print "Running lineReceived\r"
+                #print "Running lineReceived\r"
                 a = ColoredManhole.lineReceived(self, line)
                 df.callback(a)
 
@@ -99,7 +103,8 @@ class ConsoleManhole(ColoredManhole):
         if keyID in self.keyHandlers or self.enabled:
             ColoredManhole.keystrokeReceived(self, keyID, modifier)
         else:
-            print "ignoring\r"
+            #print "ignoring\r"
+            pass
 
     def handle_TAB(self):
         s = "".join(self.lineBuffer)
@@ -194,9 +199,20 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
     model = ad3.models.dht
     dataStore = SQLiteDataStore(dbFile=dbFile)
     node = ad3.models.dht.MyNode(udpPort=udpPort, dataStore=dataStore)
-    print "->", "joining network..."
+
+    formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
+    handler = logging.FileHandler("3ad.log")
+    handler.setFormatter(formatter)
+    # set up the kademlia logs
+    kademlia_logs.addHandler(handler)
+    kademlia_logs.logger.setLevel(logging.DEBUG)
+    # set up the ad3 logs
+    ad3_logs.addHandler(handler)
+    ad3_logs.logger.setLevel(logging.DEBUG)
+
+    #print "->", "joining network..."
     node.joinNetwork(knownNodes)
-    print "->", "joined network..."
+    #print "->", "joined network..."
     # create a newtwork handler using the network node
     nh = ad3.models.dht.NetworkHandler(node)
     # Set the network handler for the model.
