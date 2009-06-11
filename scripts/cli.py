@@ -30,7 +30,7 @@ if parent_dir not in sys.path:
 import ad3
 import ad3.models
 import ad3.models.dht
-from ad3.models.dht import AudioFile, Plugin
+from ad3.models.dht import AudioFile, Plugin, Tag, PluginOutput
 from ad3.learning import *
 from ad3.learning.euclid import Euclidean
 from ad3.learning.gauss import Gaussian
@@ -55,15 +55,13 @@ class ConsoleManhole(ColoredManhole):
     Adapted from this awesome mailing list entry:
     http://twistedmatrix.com/pipermail/twisted-python/2009-January/019003.html
     """
-    maxRun = 1
-
     def __init__(self, namespace=None):
         ColoredManhole.__init__(self, namespace)
         self.completer = Completer(namespace=self.namespace)
         self.completeState = 0
         self.lastTabbed = ''
         self.lastSuggested = ''
-        self.sem = defer.DeferredSemaphore(self.maxRun)
+        self.sem = defer.DeferredLock()
         self.enabled = True
 
     def connectionLost(self, reason):
@@ -242,6 +240,19 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
         retrieve from database (filename) -> void
 """
 
+def to_tag_list(tags):
+    # Make sure tags is a list of tag names.
+    if tags is not None:
+        if not isinstance(tags, list):
+            tags = [tags]
+        def f(t):
+            if isinstance(t, Tag):
+                return t.name
+            else:
+                return t
+        tags = map(f, tags)
+    return tags
+
 
 @sync
 @cont
@@ -253,17 +264,7 @@ def add_file(path, tags=None):
     @param tags: list of tags to apply to the file
     @type  tags: str, Tag object, or list of str/Tag objects
     """
-    # Make sure tags is a list of tag names.
-    if tags is not None:
-        if not isinstance(tags, list):
-            tags = [tags]
-        def f(t):
-            if isinstance(t, Tag):
-                return t.name
-            else:
-                return t
-        tags = map(f, tags)
-
+    tags = to_tag_list(tags)
 
     n = p.terminalProtocol.namespace
     def f(v):
@@ -273,6 +274,30 @@ def add_file(path, tags=None):
 
 @sync
 @cont
+def add_files(paths, tags=None):
+    """
+    @param paths: list of paths to audio files (wav, aif, mp3)
+    @type  paths: list of str or unicode
+
+    @param tags: list of tags to apply to the file
+    @type  tags: str, Tag object, or list of str/Tag objects
+    """
+    tags = to_tag_list(tags)
+
+    outer_df = defer.Deferred()
+    def f(v):
+        # parse the results from the wierd format that the controller returns.
+        results = [v[k][0] for k in v if v[k][1]]
+        outer_df.callback(results)
+
+    n = p.terminalProtocol.namespace
+    df = n['controller'].add_files(paths, user_name=n['userName'], tags=tags)
+    df.addBoth(f)
+
+    return outer_df
+
+
+
 def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginOutput=None):
     """
     @param fileName: if provided, returns only files with a matching file name
@@ -299,11 +324,71 @@ def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginO
         username = None
 
     def f(v):
-        print "AR", v
         df.callback(v)
     n['controller'].model.get_audio_files(f, file_name=fileName, user_name=userName, tag=tags, guessed_tag=guessedTags, plugin_output=pluginOutput)
     return df
 
+def get_tags(name=None, audioFile=None, guessedAudioFile=None):
+    """
+    @param name: return only tags with tag.name matching provided name
+    @type  name: unicode
+
+    @param audioFile: return only tags that have been applied to this audio file
+    @type  audioFile: AudioFile object
+
+    @param guessedAudioFile: return only tags that have been guessed for this audio file
+    @type  guessedAudioFile: AudioFile object
+    """
+    n = p.terminalProtocol.namespace
+    df = defer.Deferred()
+
+    def f(v):
+        df.callback(v)
+    n['controller'].model.get_tags(f, name=name, audio_file=audioFile, guessed_file=guessedAudioFile)
+    return df
+
+def print_file(file):
+    """
+    @param file: the file to be printed
+    @type  file: AudioFile object
+    """
+    outer_df = defer.Deferred()
+    res = dict()
+
+    def f(tags):
+        res['tags'] = tags
+
+    def g(tags):
+        res['guessed_tags'] = tags
+
+    def pr(v):
+        print "\r"
+        print file, "\r"
+        print res, "\r"
+        return v
+
+
+    df_f = get_tags(audioFile=file)
+    df_f.addCallback(f)
+    df_g = get_tags(guessedAudioFile=file)
+    df_g.addCallback(g)
+    df_l = defer.DeferredList([df_f, df_g])
+    df_l.addCallback(pr)
+    df_l.addCallback(outer_df.callback)
+    return outer_df
+
+
+@sync
+@cont
+def print_files(files):
+    """
+    @param files: the files to be printed
+    @type  files: list of AudioFile objects
+    """
+    df_lock = defer.DeferredLock()
+    df_list = [df_lock.run(print_file, file) for file in files]
+    dl = defer.DeferredList(df_list)
+    return dl
 
 
 def pr(a):
@@ -320,9 +405,14 @@ def pr(a):
 
 namespace = dict(
     pr = pr,
+    test_conn = partial(connect, 4000, 'anthony', dbFile='bob.sqlite'),
     sync = sync,
     add_file=add_file,
-    get_files=get_files,
+    add_files=add_files,
+    get_files=sync(cont(get_files)),
+    get_tags=sync(cont(get_tags)),
+    print_file=sync(cont(print_file)),
+    print_files=print_files,
     __name__ = '__console__',
     __doc__ = None,
     _result = None,
