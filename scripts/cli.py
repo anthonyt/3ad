@@ -271,6 +271,37 @@ def to_tag_list(tags):
 
 @sync
 @cont
+def store_a_bunch_of_data(offset=0, num=1000):
+    n = p.terminalProtocol.namespace
+    node = n['controller'].model._network_handler.node
+
+    for i in range(0, num):
+        key = value = str(offset + i)
+        df = node.iterativeStore(key, value)
+
+    return None
+
+@sync
+@cont
+def read_a_bunch_of_data(offset=0, num=1000):
+    n = p.terminalProtocol.namespace
+    node = n['controller'].model._network_handler.node
+    ds = node._dataStore
+
+    count_in = 0
+    count_good = 0
+    for i in range(0, num):
+        key = str(offset + i)
+        if key in ds:
+            count_in += 1
+            if ds[key] == key:
+                count_good += 1
+
+
+    return dict(cin=count_in, cgd=count_good)
+
+@sync
+@cont
 def add_plugin(module_name, name=None):
     """
     @param module_name: the module name of the plugin
@@ -516,7 +547,9 @@ cmds = dict(
     update_tag_vectors=update_tag_vectors,
     update_file_vector=update_file_vector,
     update_predictions=update_predictions,
-    create_db_snapshot=create_db_snapshot
+    create_db_snapshot=create_db_snapshot,
+    store_a_bunch_of_data=store_a_bunch_of_data,
+    read_a_bunch_of_data=read_a_bunch_of_data
 )
 
 namespace = dict(
