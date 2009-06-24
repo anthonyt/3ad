@@ -69,6 +69,7 @@ class ConsoleManhole(ColoredManhole):
         self.enabled = True
 
     def connectionLost(self, reason):
+        ColoredManhole.connectionLost(self, reason)
         reactor.stop()
         print ""
 
