@@ -37,6 +37,10 @@ from ad3.learning.gauss import Gaussian
 from ad3.learning.svm import SVM
 from ad3.controller import Controller
 
+import logging
+from entangled.kademlia import logs as kademlia_logs
+from ad3 import logs as ad3_logs
+
 defer.setDebugging(True)
 
 class ConsoleManholeInterpreter(ManholeInterpreter):
@@ -194,6 +198,17 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
     model = ad3.models.dht
     dataStore = SQLiteDataStore(dbFile=dbFile)
     node = ad3.models.dht.MyNode(udpPort=udpPort, dataStore=dataStore)
+
+    formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
+    handler = logging.FileHandler("3ad.log")
+    handler.setFormatter(formatter)
+    # set up the kademlia logs
+    kademlia_logs.addHandler(handler)
+    kademlia_logs.logger.setLevel(logging.DEBUG)
+    # set up the ad3 logs
+    ad3_logs.addHandler(handler)
+    ad3_logs.logger.setLevel(logging.DEBUG)
+
     #print "->", "joining network..."
     node.joinNetwork(knownNodes)
     #print "->", "joined network..."
