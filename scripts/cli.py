@@ -485,7 +485,7 @@ def create_db_snapshot(outFile):
     cur.execute('INSERT INTO backup.data(%s) SELECT %s FROM data' % (col_str, col_str))
     con.commit()
 
-namespace = dict(
+cmds = dict(
     test_conn = partial(connect, 4000, 'anthony', dbFile='bob.sqlite'),
     sync = sync,
     add_file=add_file,
@@ -497,14 +497,20 @@ namespace = dict(
     update_tag_vectors=update_tag_vectors,
     update_file_vector=update_file_vector,
     update_predictions=update_predictions,
-    create_db_snapshot=create_db_snapshot,
+    create_db_snapshot=create_db_snapshot
+)
 
+namespace = dict(
+    commands = cmds,
     __name__ = '__console__',
     __doc__ = None,
     _result = None,
     connect = connect,
     controller = None
 )
+
+for cmd in cmds:
+    namespace[cmd] = cmds[cmd]
 
 fd = sys.__stdin__.fileno()
 oldSettings = termios.tcgetattr(fd)
