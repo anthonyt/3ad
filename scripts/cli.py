@@ -269,6 +269,24 @@ def to_tag_list(tags):
         tags = map(f, tags)
     return tags
 
+@sync
+@cont
+def add_plugin(module_name, name=None):
+    """
+    @param module_name: the module name of the plugin
+    @type  module_name: str or unicode
+
+    @param name: the name of this plugin
+    @type  name: str or unicode
+    """
+    if name is None:
+        name = module_name
+
+    n = p.terminalProtocol.namespace
+    def f(v):
+        return v
+    df = n['controller'].add_plugin(f, name, module_name)
+    return df
 
 @sync
 @cont
@@ -488,6 +506,7 @@ def create_db_snapshot(outFile):
 cmds = dict(
     test_conn = partial(connect, 4000, 'anthony', dbFile='bob.sqlite'),
     sync = sync,
+    add_plugin=add_plugin,
     add_file=add_file,
     add_files=add_files,
     get_files=sync(get_files),
