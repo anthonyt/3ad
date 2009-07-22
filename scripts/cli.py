@@ -9,7 +9,6 @@ import termios
 import keyword
 import __builtin__
 
-from time import sleep
 from functools import partial
 from IPython.completer import Completer
 
@@ -276,9 +275,15 @@ def store_a_bunch_of_data(offset=0, num=1000):
     n = p.terminalProtocol.namespace
     node = n['controller'].model._network_handler.node
 
+    def timeout(failure, i):
+        failure.trap(entangled.kademlia.protocol.TimeoutError)
+        return i
+
     for i in range(0, num):
         key = value = str(offset + i)
         df = node.iterativeStore(key, value)
+
+        df.addErrback(timeout, i)
 
     return None
 
@@ -300,6 +305,43 @@ def read_a_bunch_of_data(offset=0, num=1000):
 
 
     return dict(cin=count_in, cgd=count_good)
+
+@sync
+@cont
+def find_a_bunch_of_data(offset=0, num=1000):
+    n = p.terminalProtocol.namespace
+    node = n['controller'].model._network_handler.node
+    outer_df = defer.Deferred()
+
+    done = [0]
+    g = [0]
+    b = [0]
+    def complete():
+        done[0] += 1
+        if done[0] >= num:
+            outer_df.callback(dict(cin=g[0]))
+
+    def timeout(failure, i):
+        failure.trap(entangled.kademlia.protocol.TimeoutError)
+        b[0] += 1
+        complete()
+        return i
+
+    def success(val, i):
+        if isinstance(val, dict):
+            g[0] += 1
+        else:
+            b[0] += 1
+        complete()
+        return val
+
+    for i in range(0, num):
+        key = str(offset + i)
+        df = node.iterativeFindValue(key)
+        df.addCallback(success, i)
+        df.addErrback(timeout, i)
+
+    return outer_df
 
 @sync
 @cont
@@ -550,7 +592,8 @@ cmds = dict(
     update_predictions=update_predictions,
     create_db_snapshot=create_db_snapshot,
     store_a_bunch_of_data=store_a_bunch_of_data,
-    read_a_bunch_of_data=read_a_bunch_of_data
+    read_a_bunch_of_data=read_a_bunch_of_data,
+    find_a_bunch_of_data=find_a_bunch_of_data
 )
 
 namespace = dict(
