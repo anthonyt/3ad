@@ -579,6 +579,9 @@ def create_db_snapshot(outFile):
 
 cmds = dict(
     test_conn = partial(connect, 4000, 'anthony', dbFile='bob.sqlite'),
+    connecta = partial(connect, 4000, 'user_a', knownNodes=[('127.0.0.1', 4001)], dbFile='a.sqlite', logFile='a.log'),
+    connectb = partial(connect, 4001, 'user_b', knownNodes=[('127.0.0.1', 4000)], dbFile='b.sqlite', logFile='b.log'),
+    connectc = partial(connect, 4002, 'user_c', knownNodes=[('127.0.0.1', 4001)], dbFile='c.sqlite', logFile='c.log'),
     sync = sync,
     add_plugin=add_plugin,
     add_file=add_file,
