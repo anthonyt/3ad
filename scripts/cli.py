@@ -177,7 +177,7 @@ def sync(fn):
     s.__doc__ = fn.__doc__
     return s
 
-def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
+def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:', logFile='3ad.log'):
     """
     udpPort: int
     userName: str
@@ -201,7 +201,7 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:'):
     node = ad3.models.dht.MyNode(udpPort=udpPort, dataStore=dataStore)
 
     formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
-    handler = logging.FileHandler("3ad.log")
+    handler = logging.FileHandler(logFile)
     handler.setFormatter(formatter)
     # set up the kademlia logs
     kademlia_logs.addHandler(handler)
