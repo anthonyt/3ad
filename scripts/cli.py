@@ -226,6 +226,7 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:', log
 
     p.terminalProtocol.namespace['controller'] = controller
     p.terminalProtocol.namespace['userName'] = userName
+    p.terminalProtocol.namespace['node'] = controller.model._network_handler.node
 
     return controller
 
