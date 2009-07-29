@@ -13,14 +13,17 @@ from entangled.kademlia.node import rpcmethod
 from entangled.kademlia.protocol import KademliaProtocol
 from time import time
 from sets import Set
+from twisted.internet.protocol import ServerFactory
+from twisted.internet.reactor import listenTCP
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
 from functools import partial
-from .. import logs
-logger = logs.logger
+import protocol
+import logging
+logger = logging.getLogger('3ad')
 
-class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
+class Node(entangled.dtuple.DistributedTupleSpacePeer):
     def sendOffloadCommand(self, key, struct):
         hash = {
             'module_name': struct['module_name'],

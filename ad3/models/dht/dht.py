@@ -17,11 +17,9 @@ from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
 from functools import partial
-from .. import logs
-logger = logs.logger
 
-from protocol import MyProtocol
-from node import MyNode
+import logging
+logger = logging.getLogger('3ad')
 
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
@@ -342,6 +340,9 @@ def set_network_handler(obj):
         return val
 
     _dht_df.addCallback(do_nothing)
+
+def get_network_handler():
+    return _network_handler
 
 class SaveableModel(object):
     def get_key(self):
