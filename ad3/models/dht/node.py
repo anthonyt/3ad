@@ -13,14 +13,40 @@ from entangled.kademlia.node import rpcmethod
 from entangled.kademlia.protocol import KademliaProtocol
 from time import time
 from sets import Set
+from twisted.internet.protocol import ServerFactory
+from twisted.internet.reactor import listenTCP
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
 from functools import partial
-from .. import logs
-logger = logs.logger
+import protocol
+import logging
+logger = logging.getLogger('3ad')
 
-class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
+class Node(entangled.dtuple.DistributedTupleSpacePeer):
+    def __init__(self, id=None, udpPort=4000, tcpPort=4000,
+                 dataStore=None, routingTable=None,
+                 networkProtocol=None, oobProtocol=protocol.OOBProtocol):
+
+        entangled.dtuple.DistributedTupleSpacePeer.__init__(
+            self, id=id, udpPort=udpPort, dataStore=dataStore,
+            routingTable=routingTable, networkProtocol=networkProtocol
+        )
+
+        self.oobPort = tcpPort
+        self._oobListeningPort = None
+        self._oobFactory = None
+        self._oobProtocol = oobProtocol
+
+    def joinNetwork(self, knownNodeAddresses=None):
+        entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
+            self, knownNodeAddresses=knownNodeAddresses
+        )
+
+        self._oobFactory = ServerFactory()
+        self._oobFactory.protocol = self._oobProtocol
+        self._oobListeningPort = listenTCP(self.oobPort, self._oobFactory)
+
     def sendOffloadCommand(self, key, struct):
         hash = {
             'module_name': struct['module_name'],

@@ -1,4 +1,5 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2.5
+
 import os
 import sys
 import time
@@ -19,6 +20,7 @@ from twisted.internet import stdio
 from twisted.conch.insults.insults import ServerProtocol
 from twisted.conch.manhole import Manhole, ColoredManhole, ManholeInterpreter
 
+import entangled
 from entangled.kademlia.datastore import SQLiteDataStore
 
 # ensure the main ad3 module is on the path
@@ -197,7 +199,7 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:', log
     # Set up model with its network node
     model = ad3.models.dht
     dataStore = SQLiteDataStore(dbFile=dbFile)
-    node = ad3.models.dht.MyNode(udpPort=udpPort, dataStore=dataStore)
+    node = ad3.models.dht.Node(udpPort=udpPort, dataStore=dataStore)
 
     formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
     handler = logging.FileHandler(logFile)
@@ -225,7 +227,7 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:', log
 
     p.terminalProtocol.namespace['controller'] = controller
     p.terminalProtocol.namespace['userName'] = userName
-    p.terminalProtocol.namespace['node'] = controller.model._network_handler.node
+    p.terminalProtocol.namespace['node'] = controller.model.get_network_handler().node
 
     return controller
 
@@ -273,7 +275,7 @@ def to_tag_list(tags):
 @cont
 def store_a_bunch_of_data(offset=0, num=1000):
     n = p.terminalProtocol.namespace
-    node = n['controller'].model._network_handler.node
+    node = n['controller'].model.get_network_handler().node
 
     def timeout(failure, i):
         failure.trap(entangled.kademlia.protocol.TimeoutError)
@@ -291,7 +293,7 @@ def store_a_bunch_of_data(offset=0, num=1000):
 @cont
 def read_a_bunch_of_data(offset=0, num=1000):
     n = p.terminalProtocol.namespace
-    node = n['controller'].model._network_handler.node
+    node = n['controller'].model.get_network_handler().node
     ds = node._dataStore
 
     count_in = 0
@@ -310,7 +312,7 @@ def read_a_bunch_of_data(offset=0, num=1000):
 @cont
 def find_a_bunch_of_data(offset=0, num=1000):
     n = p.terminalProtocol.namespace
-    node = n['controller'].model._network_handler.node
+    node = n['controller'].model.get_network_handler().node
     outer_df = defer.Deferred()
 
     done = [0]
@@ -547,7 +549,7 @@ def create_db_snapshot(outFile):
     thanks to: http://osdir.com/ml/python.db.pysqlite.user/2006-01/msg00022.html
     """
     n = p.terminalProtocol.namespace
-    ds = n['controller'].model._network_handler.node._dataStore
+    ds = n['controller'].model.get_network_handler().node._dataStore
     cur = ds._cursor
     con = ds._db
     columns = [
