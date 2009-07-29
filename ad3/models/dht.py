@@ -20,6 +20,9 @@ from functools import partial
 from .. import logs
 logger = logs.logger
 
+from protocol import MyProtocol
+from node import MyNode
+
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
     def __init__(self, net_handler, tuple_list):
@@ -913,164 +916,9 @@ def guess_tag_for_file(audio_file, tag):
 
     return outer_df
 
-class MyProtocol(entangled.kademlia.protocol.KademliaProtocol):
-    def sendRPC(self, contact, method, args, rawResponse=False):
-        logger.debug("-->> myprotocol: sendRPC(%r, %s)", contact, method)
-        outer_df = defer.Deferred()
 
-        def error(failure):
-            logger.debug("myprotocol: ERROR %r", failure)
-            outer_df.errback(failure)
-            return failure
+# this only runs if the module was *not* imported
+if __name__ == '__main__':
+        main()
 
-        def got_response(val):
-            logger.debug("myprotocol: GOT RESPONSE %r", val)
-            outer_df.callback(val)
-            return val
 
-        def actually_send(val):
-            logger.debug("myprotocol: SENDING (%s, %r, %r)", method, args, rawResponse)
-            df = KademliaProtocol.sendRPC(self, contact, method, args, rawResponse)
-            return df
-
-        # the deferred returned by this is what _dht_df waits for
-        # it should get called back as soon as we get a response message
-        def handle_dfs(val):
-            logger.debug("<<---------->>")
-            logger.debug("myprotocol: HANDLING DFS")
-            df = defer.Deferred()
-            def done(val):
-                logger.debug("myprotocol: DONE")
-                import time
-                time.sleep(0.1)
-                logger.debug("myprotocol: Continuing...")
-                df.callback(None)
-
-            inner_df = defer.Deferred()
-            inner_df.addCallback(actually_send)
-            inner_df.addCallback(got_response)
-            inner_df.addErrback(error)
-            inner_df.addBoth(done)
-            inner_df.callback(None)
-
-            return df
-
-        # should execute immediately
-        _dht_df.addCallback(handle_dfs)
-
-        # should get called back as soon as msg returns.
-        logger.debug("--<< myprotocol: RETURNING outer_df")
-        return outer_df
-
-class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
-    def sendOffloadCommand(self, key, struct):
-        hash = {
-            'module_name': struct['module_name'],
-            'file_uri': struct['file_uri']
-        }
-        value = simplejson.dumps(hash)
-
-        def executeRPC(nodes):
-            contact = random.choice(nodes)
-            logger.debug("SENDING RPC TO: %r", contact)
-            struct['contact'] = contact
-
-            df = contact.offload(key, value, self.id)
-            return df
-
-        # Find k nodes closest to the key...
-        df = self.iterativeFindNode(key)
-        df.addCallback(executeRPC)
-
-        return df
-
-    def pollOffloadedCalculation(self, key, struct):
-        hash = {
-            'module_name': struct['module_name'],
-            'file_uri': struct['file_uri']
-        }
-        value = simplejson.dumps(hash)
-
-        def update_struct(val):
-            response = simplejson.loads(val)
-            struct['complete'] = response['complete']
-            struct['failed'] = response['failed']
-            struct['vector'] = response['vector']
-
-        df = struct['contact'].poll(key, value, self.id)
-        df.addCallback(update_struct)
-
-        return df
-
-    @rpcmethod
-    def offload(self, key, value, originalPublisherID=None, **kwargs):
-        logger.debug("-------------")
-        hash = simplejson.loads(value)
-
-        plugin_module = hash['module_name']
-        file_uri = hash['file_uri']
-        id = plugin_module + file_uri
-        logger.debug("RECEIVED AN OFFLOAD RPC! %r %r", file_uri, plugin_module)
-
-        if not hasattr(self, 'computations'):
-            self.computations = {}
-
-        self.computations[id] = {
-            'complete': False,
-            'vector': None,
-            'failed': False,
-            'downloaded': False
-        }
-
-        def do_computation():
-            try:
-                plugin = Plugin('temp', plugin_module)
-
-                logger.debug("Downloading %s", file_uri)
-                (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
-                self.computations[id]['downloaded'] = True
-
-                logger.debug("Computing vector for %s", file_name)
-                vector = plugin.create_vector(file_name)
-                if len(vector) == 0 or len([a for a in vector if a == 0]) == len(vector):
-                    # Zero length vector or zeroed out vector is an indication that Marsyas choked.
-                    self.computations[id]['failed'] = True
-                self.computations[id]['complete'] = True
-                self.computations[id]['vector'] = vector
-
-                os.remove(file_name)
-            except Exception:
-                logger.debug("Computation error :( %s", failure.getErrorMessage())
-                self.computations[id]['complete'] = True
-                self.computations[id]['failed'] = True
-            finally:
-                return None
-
-        df = threads.deferToThread(do_computation)
-
-        #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
-        #file.write(value)
-        logger.debug("OFFLOAD FINISHED")
-        return "OK"
-
-    @rpcmethod
-    def poll(self, key, value, originalPublisherID=None, age=0, **kwargs):
-        hash = simplejson.loads(value)
-        plugin_module = hash['module_name']
-        file_uri = hash['file_uri']
-        id = plugin_module + file_uri
-
-        if not hasattr(self, 'computations') or not self.computations.has_key(id):
-            # we've never heard of the requested offload operation. make something up!
-            logger.debug("Returning BS poll")
-            result = {'complete': True, 'vector': None, 'failed': True, 'downloaded': False}
-        elif self.computations[id]['complete']:
-            # we've finished the requested offload operation. remove if from the list and return it
-            logger.debug("Returning finished poll")
-            result = self.computations.pop(id)
-        else:
-            # we haven't finished the requested offload operation, but we have some data on it
-            logger.debug("Returning unfinished poll")
-            result = self.computations[id]
-
-        return simplejson.dumps(result)
