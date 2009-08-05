@@ -16,64 +16,86 @@ from sets import Set
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
-import twisted.internet.protocol as tip
 import twisted.web.http as twh
 from twisted.web.http_headers import Headers
 from functools import partial
 
-class OOBServerProtocol(tip.Protocol):
-    def __init__(self, node):
-        self.node = node
+class Request(twh.Request):
+    """Created by the HTTPServer to service a requeset from an HTTPClient"""
+    def __init__(self, channel, queued):
+        twh.Request(self, channel, queued)
 
-    def dataReceived(self, data):
-        """ Called when server receives data """
-        # decode request message
-        # if node.checkPendingOOBRequest(contact, file_key)
-        # then respond with the file length and start sending the file ( using self.transport.write() )
-        # else terminate the connection self.transport.loseConnection()
+        self.server = self.channel
 
-    def connectionMade(self):
-        """ Received connection from client """
+    def process(self):
+        """
+        Called when a request completes (and all data is received)
+        """
+        self.requestHeaders.hasHeader('x-awesome')
+        awesomes = self.requestHeaders.getRawHeaders('x-awesome', [])
+        content = self.content
+        method = self.method # (get, post, etc)
+        path = self.path
+
+        length = os.path.getsize(path)
+        self.setHeader('content-length', str(int(length)))
+        self.setHeader('content-type', 'application/octet-stream')
+        # alternately audio/x-wav or audio/mpeg or audio/x-aiff
+        self.setHeader('x-sending-file', 'True')
+        file = open(path, 'rb')
+
+        # send the file in 4kb chunks
+        chunk_size = 4096
+        while True:
+            chunk = file.read(chunk_size)
+            welf.write(chunk)
+            if len(chunk) < chunk_size:
+                break
 
 
-class OOBClientProtocol(tip.Protocol):
-    def __init__(self, node, file_key):
-        self.node = node
-        self.file_key = file_key
+class HTTPServer(twh.HTTPChannel):
+    """ The only purpose of this server is to spin off a Request object when a new request is received on an existing connection """
+    requestFactory = Request
 
-    def dataReceived(self, data):
-        """ Called when Client receives data """
-        # decode response message (file size)
-        # receive file
-        # terminate connection
+    def __init__(self):
+        twh.HTTPChannel.__init__(self)
 
-    def connectionMade(self):
-        """ Connected to server """
-        # send request file URI (incl self.node.address and self.node.port)
 
-class ServerFactory(tip.ServerFactory):
-    def __init__(self, node, protocol=OOBServerProtocol):
-        self.protocol = protocol
-        self.node = node
+class HTTPServerFactory(twh.HTTPFactory):
+    """ The only purpose of this factory is to spin off a Server object when a new connection is received """
+    protocol = HTTPServer
 
-    def buildProtocol(self, addr):
-        p = self.protocol(node=self.node)
-        p.factory = self
-        return p
+    def __init__(self, logPath=None, timeout=60*60*12):
+        twh.HTTPFactory.__init__(self, logPath, timeout)
 
-class ClientFactory(tip.ClientCreator):
-    def __init__(self, reactor, protocolClass=OOBClientProtocol, *args, **kwargs):
-        tip.ClientCreator.__init__(
-            self, reactor, protocolClass, *args, **kwargs)
 
-    def connectTCP(self, host, port, timeout=30, bindAddress=None, **kwargs):
-        """Connect to remote host, return Deferred of resulting protocol instance."""
-        d = defer.Deferred()
-        new_kwargs = {}
-        new_kwargs.update(self.kwargs)
-        new_kwargs.update(kwargs)
-        instance = self.protocolClass(*self.args, **new_kwargs)
-        f = _InstanceFactory(self.reactor, instance, d)
-        self.reactor.connectTCP(host, port, f,
-            timeout=timeout, bindAddress=bindAddress)
-        return d
+class HTTPClient(twh.HTTPClient):
+    def __init__(self, filename):
+        self.receivingFile = False
+
+    def sendFileRequest(self, filename):
+        self.sendCommand('GET', filename)
+        self.sendHeader('x-awesome', 'srsly oh yea')
+        self.endHeaders()
+
+    def handleHeader(self, key, val):
+        # If this is going to be a file, accept it
+        if key == 'x-sending-file':
+            self.receivingFile = True
+
+    def handleResponseEnd(self):
+        # SUCCESS. Response finished.
+        if self.receivingFile:
+            # Terminate the connection.
+            # Send the self.__buffer file to marsyas for analysis!
+            pass
+
+    def lineReceived(self, line):
+        # override default stringIO() buffer with a file
+        if not self.firstLine and not line:
+            self.__buffer = tempfile.NamedTemporaryFile()
+            self.handleEndHeaders()
+            self.setRawMode()
+        else:
+            twh.HTTPClient.lineReceived(self, line)
+
