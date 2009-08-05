@@ -9,12 +9,13 @@ import entangled
 import entangled.dtuple
 import entangled.kademlia.contact
 import entangled.kademlia.msgtypes
+from mutex import mutex
 from entangled.kademlia.node import rpcmethod
 from entangled.kademlia.protocol import KademliaProtocol
 from time import time
 from sets import Set
-from twisted.internet.protocol import ServerFactory
 from twisted.internet.reactor import listenTCP
+from twisted.internet.protocol import ClientCreator
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
@@ -26,7 +27,7 @@ logger = logging.getLogger('3ad')
 class Node(entangled.dtuple.DistributedTupleSpacePeer):
     def __init__(self, id=None, udpPort=4000, tcpPort=4000,
                  dataStore=None, routingTable=None,
-                 networkProtocol=None, oobProtocol=protocol.OOBProtocol):
+                 networkProtocol=None):
 
         entangled.dtuple.DistributedTupleSpacePeer.__init__(
             self, id=id, udpPort=udpPort, dataStore=dataStore,
@@ -37,19 +38,48 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         self._oobListeningPort = None
         self._oobFactory = None
         self._oobProtocol = oobProtocol
+        self._oobMutex = mutex()
+        self._oobRequestsPending = {}
 
     def joinNetwork(self, knownNodeAddresses=None):
         entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
             self, knownNodeAddresses=knownNodeAddresses
         )
 
-        self._oobFactory = ServerFactory()
-        self._oobFactory.protocol = self._oobProtocol
-        self._oobListeningPort = listenTCP(self.oobPort, self._oobFactory)
+        self._oobServerFactory = protocol.ServerFactory(node=self)
+        self._oobClientFactory = protocol.ClientFactory(
+            reactor=reactor,
+            node=self
+        )
+        self._oobListeningPort = \
+            listenTCP(self.oobPort, self._oobServerFactory)
+
+    def addPendingOOBRequest(self, contact, file_key):
+        self._oobRequestsPending[file_key] = contact
+
+        # Set a timeout to remove the listener,
+        # if it has not already been removed
+        oobTimeout = 5
+        reactor.callLater(oobTimeout, 
+            self.checkPendingOOBRequest, contact, file_key)
+
+    def checkPendingOOBRequest(self, contact, file_key):
+        if self._oobRequestsPending.get(file_key, None) == contact:
+            del self._oobRequestsPending[file_key]
+            return True
+
+        return False
+
+    def createOOBClient(self, contact, file_key):
+        # df will be called back with the client instance
+        # as soon as it is created
+        df = self._oobClientFactory.connectTCP(
+            contact.address, contact.port, file_key=file_key
+        )
+        return df
 
     def sendOffloadCommand(self, key, struct):
         hash = {
-            'module_name': struct['module_name'],
             'file_uri': struct['file_uri']
         }
         value = simplejson.dumps(hash)
@@ -70,7 +100,6 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
 
     def pollOffloadedCalculation(self, key, struct):
         hash = {
-            'module_name': struct['module_name'],
             'file_uri': struct['file_uri']
         }
         value = simplejson.dumps(hash)

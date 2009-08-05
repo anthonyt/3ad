@@ -742,12 +742,15 @@ def update_vector(plugin, audio_file):
     """
     logger.debug("------\n -> Beginning update vector")
 
+    audio_key = audio_file.get_key()
+
     # list to store the contact we offloaded to
     # sendOffloadCommand() method updates its value
     struct = {
         'contact': None,
         'module_name': plugin.module_name,
-        'file_uri': 'http://127.0.0.1/audio'+ audio_file.file_name,
+        'file_uri': audio_file.file_name,
+        'file_key': audio_key,
         'downloaded': False,
         'complete': False,
         'failed': False,
@@ -759,7 +762,6 @@ def update_vector(plugin, audio_file):
     outer_df = defer.Deferred()
     poll_cb = None
 
-    audio_key = audio_file.get_key()
 
     def done(val):
         logger.debug("Plugin Output Created and Saved. Calling back now. %r", val)
