@@ -164,6 +164,7 @@ class HTTPClient(twh.HTTPClient):
             # Send the self.__buffer file to marsyas for analysis!
             self.__buffer.seek(0)
             self.factory.callback(self.__buffer)
+            self.__buffer = None
 
     def lineReceived(self, line):
         if not self.firstLine and not line:
