@@ -5,6 +5,7 @@ import urllib
 import tempfile
 import random
 import os
+import mutex
 import entangled
 import entangled.dtuple
 import entangled.kademlia.contact
@@ -38,8 +39,7 @@ class Request(twh.Request):
 
         # make sure that the request_key is one we're waiting for.
         # try to remove it from the list of pending request_keys
-        requested_file = self.server.factory.pending_request_keys.pop(
-                request_key, None)
+        requested_file = self.server.factory.get_request_key(request_key)
         if not requested_file:
             return
 
@@ -90,7 +90,31 @@ class HTTPServerFactory(twh.HTTPFactory):
     def __init__(self, *args, **kwargs):
         twh.HTTPFactory.__init__(self, *args, **kwargs)
 
-        self.pending_request_keys = dict()
+        self._pending_request_keys = dict()
+        self._prk_mux = mutex.mutex()
+
+    def _unsafe_add_request_key(self, kf_tuple):
+        key, file_name = kf_tuple
+        self._pending_request_keys[key] = file_name
+        self._prk_mux.unlock()
+
+    def _unsafe_get_request_key(self, ks_tuple):
+        key, struct = ks_tuple
+        struct[0] = self._pending_request_keys.pop(key, None)
+        self._prk_mux.unlock()
+
+    def add_request_key(self, key, file_name):
+        return self._prk_mux.lock(
+                self._unsafe_add_request_key, (key, file_name)
+        )
+
+    def get_request_key(self, key):
+        struct = [0]
+        self._prk_mux.lock(
+                self._unsafe_get_request_key, (key, struct)
+        )
+        return struct[0]
+
 
 class HTTPClient(twh.HTTPClient):
     """
@@ -219,7 +243,8 @@ if __name__ == "__main__":
         reactor.connectTCP(hostname, port, clientFactory)
     else:
         serverFactory = HTTPServerFactory()
-        serverFactory.pending_request_keys.update(serverKeys)
+        for k in serverKeys:
+            serverFactory.add_request_key(k, serverKeys[k])
         reactor.listenTCP(port, serverFactory)
 
     reactor.run()
