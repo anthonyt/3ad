@@ -30,25 +30,45 @@ class Request(twh.Request):
         """
         Called when a request completes (and all data is received)
         """
-        self.requestHeaders.hasHeader('x-awesome')
-        awesomes = self.requestHeaders.getRawHeaders('x-awesome', [])
+        # Make sure this request had a useful request_key
+        request_keys = self.requestHeaders.getRawHeaders('x-request-key', None)
+        if not request_keys:
+            return
+        request_key = request_keys[0]
+
+        # make sure that the request_key is one we're waiting for.
+        # try to remove it from the list of pending request_keys
+        requested_file = self.server.factory.pending_request_keys.pop(
+                request_key, None)
+        if not requested_file:
+            return
+
+        # Make sure the file requested by the client (self.path) is the one we
+        # wanted to give them (requested_file).
+        if not requested_file == self.path:
+            return
+
+        # If we got here, we know that this was a valid and pending request
         content = self.content
         method = self.method # (get, post, etc)
-        path = self.path
 
-        length = os.path.getsize(path)
+        # Set our headers
+        # TODO: Maybe specify content-type as audio/x-wav, audio/mpeg, etc.
+        length = os.path.getsize(self.path)
         self.setHeader('content-length', str(int(length)))
         self.setHeader('content-type', 'application/octet-stream')
-        # alternately audio/x-wav or audio/mpeg or audio/x-aiff
-        self.setHeader('x-sending-file', 'True')
-        file = open(path, 'rb')
 
-        # send the file in 4kb chunks
+        # Read the file and send it in 4kb chunks
+        file = open(self.path, 'rb')
         chunk_size = 4096
         while True:
             chunk = file.read(chunk_size)
             self.write(chunk)
             if len(chunk) < chunk_size:
+                # TODO: Find out if this is true:
+                # I'm assuming that if a read succeeds, but returns less than
+                # the maximum number of bytes, it signifies, in python, that
+                # we have reached the end of the file.
                 break
 
 
@@ -67,6 +87,10 @@ class HTTPServerFactory(twh.HTTPFactory):
     """
     protocol = HTTPServer
 
+    def __init__(self, *args, **kwargs):
+        twh.HTTPFactory.__init__(self, *args, **kwargs)
+
+        self.pending_request_keys = dict()
 
 class HTTPClient(twh.HTTPClient):
     """
@@ -79,36 +103,43 @@ class HTTPClient(twh.HTTPClient):
     This seems like a hideous blurring of responsibility to me, so we
     encapsulate what simple options we need here.
     """
-    def __init__(self, filename=None):
+    def __init__(self):
         self.receivingFile = False
 
     def sendFileRequest(self, filename):
         self.sendCommand('GET', filename)
-        self.sendHeader('x-awesome', 'srsly oh yea')
+        self.sendHeader('x-request-key', self.factory.request_key)
         self.endHeaders()
 
     def connectionMade(self):
         self.sendFileRequest(self.factory.path)
 
     def handleHeader(self, key, val):
-        # If this is going to be a file, accept it
-        if key.lower() == 'x-sending-file':
-            self.receivingFile = True
+        # Handle individual header lines
+        pass
 
     def handleEndHeaders(self):
         #self.factory.gotHeaders(self.headers)
         pass
 
+    def handleStatus(self, version, status, message):
+        """
+        Called when the status-line is received.
+
+        @param version: e.g. 'HTTP/1.0'
+        @param status: e.g. '200'
+        @type status: C{str}
+        @param message: e.g. 'OK'
+        """
+        if status == '200':
+            self.receivingFile = True
+
     def handleResponseEnd(self):
         # SUCCESS. Response finished.
-        if self.receivingFile:
-            # Terminate the connection.
+        if self.receivingFile and self.__buffer is not None:
             # Send the self.__buffer file to marsyas for analysis!
             self.__buffer.seek(0)
-            print "BEGIN FILE"
-            print self.__buffer.read()
-            print "EOF RECEIVED"
-            pass
+            self.factory.callback(self.__buffer)
 
     def lineReceived(self, line):
         if not self.firstLine and not line:
@@ -130,6 +161,8 @@ class HTTPClientFactory(twc.HTTPClientFactory):
 
     Instantiation arguments:
         url
+        callback
+        key
         method='GET'
         postdata=None
         headers=None
@@ -143,8 +176,34 @@ class HTTPClientFactory(twc.HTTPClientFactory):
     """
     protocol = HTTPClient
 
+    def __init__(self, callback, key, url, method='GET', postdata=None,
+                 headers=None, agent="Twisted PageGetter", timeout=0,
+                 cookies=None, followRedirect=1, redirectLimit=20):
+        """Initialize the Client Factory (builder)
+
+        Additional parameter "callback" is expected to be a function that takes
+        a single file object as an argument.
+
+        It will be called with the received file as an argument, if receipt of
+        the file is successful.
+
+        Additional parameter "key" is expected to be an ascii-encoded byte string
+        that will uniquely identify the request.
+        """
+
+        twc.HTTPClientFactory.__init__(self, url, method, postdata, headers,
+                agent, timeout, cookies, followRedirect, redirectLimit)
+
+        self.callback = callback
+        self.request_key = key
+
 
 import sys
+def mycallback(file):
+    print "<<< EOF"
+    print file.read()
+    print "EOF"
+
 if __name__ == "__main__":
     client = len(sys.argv) > 1
     hostname = 'localhost'
@@ -152,8 +211,16 @@ if __name__ == "__main__":
     file = '/Users/anthony/cp.sh'
     url = 'http://%s:%d%s' % (hostname, port, file)
 
+    clientKey = 'abcdefg'
+    serverKeys = dict(zomg='not the file', bob='jimmy', abcdefg=file)
+
     if client:
-        reactor.connectTCP(hostname, port, HTTPClientFactory(url, timeout=0))
+        clientFactory = HTTPClientFactory(mycallback, clientKey, url, timeout=0)
+        reactor.connectTCP(hostname, port, clientFactory)
     else:
-        reactor.listenTCP(port, HTTPServerFactory())
+        serverFactory = HTTPServerFactory()
+        serverFactory.pending_request_keys.update(serverKeys)
+        reactor.listenTCP(port, serverFactory)
+
     reactor.run()
+
