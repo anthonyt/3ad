@@ -361,9 +361,7 @@ def add_plugin(module_name, name=None):
         name = module_name
 
     n = p.terminalProtocol.namespace
-    def f(v):
-        return v
-    df = n['controller'].add_plugin(f, name, module_name)
+    df = n['controller'].add_plugin(name, module_name)
     return df
 
 @sync
@@ -379,9 +377,7 @@ def add_file(path, tags=None):
     tags = to_tag_list(tags)
 
     n = p.terminalProtocol.namespace
-    def f(v):
-        return v
-    df = n['controller'].add_file(f, path, user_name=n['userName'], tags=tags)
+    df = n['controller'].add_file(path, user_name=n['userName'], tags=tags)
     return df
 
 @sync
@@ -427,16 +423,12 @@ def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginO
     @type  pluginOutput: PluginOutput object
     """
     n = p.terminalProtocol.namespace
-    df = defer.Deferred()
-
     if userName is None:
         userName = n['userName']
     if userName is '':
         username = None
 
-    def f(v):
-        df.callback(v)
-    n['controller'].model.get_audio_files(f, file_name=fileName, user_name=userName, tag=tags, guessed_tag=guessedTags, plugin_output=pluginOutput)
+    df = n['controller'].model.get_audio_files(file_name=fileName, user_name=userName, tag=tags, guessed_tag=guessedTags, plugin_output=pluginOutput)
     return df
 
 @cont
@@ -510,11 +502,7 @@ def update_tag_vectors():
     Update the vectors for all tags based on the vectors for all files with each tag.
     """
     n = p.terminalProtocol.namespace
-    df = defer.Deferred()
-
-    def f(v):
-        df.callback(v)
-    n['controller'].update_tag_vectors(f)
+    df = n['controller'].update_tag_vectors()
     return df
 
 @sync
@@ -535,11 +523,7 @@ def update_predictions():
     Update all predicted tags.
     """
     n = p.terminalProtocol.namespace
-    df = defer.Deferred()
-
-    def f(v):
-        df.callback(v)
-    n['controller'].guess_tags(f, user_name=n['userName'])
+    df = n['controller'].guess_tags(user_name=n['userName'])
     return df
 
 @cont
