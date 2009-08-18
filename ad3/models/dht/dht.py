@@ -21,6 +21,9 @@ from functools import partial
 import logging
 logger = logging.getLogger('3ad')
 
+offload_result_timeout = 300 # 5 minutes; client must download and process vector in this time
+offload_poll_wait = 10 # 10 seconds between node.pollOffloadedCalculation calls
+
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
     def __init__(self, net_handler, tuple_list):
@@ -739,14 +742,45 @@ def save(obj):
     df = obj.save()
     return df
 
-def update_vector(plugin, audio_file):
-    """ Create or Replace the current PluginOutput object for the
-    provided plugin/audio file pair. Saves the PluginObject to storage.
+def generate_plugin_output(audio_file, plugin):
+    pass
 
-    @param plugin: the plugin object to use
-    @type  plugin: Plugin
+def generate_plugin_outputs(audio_file):
+    outer_df = defer.Deferred()
+    results = []
 
-    @param audio_file: the audio file to run the plugin on
+    def done(v):
+        outer_df.callback(results)
+
+    def keep_result(val):
+        results.append(val)
+        return None
+
+    def gpo(val, f, p):
+        df = generate_plugin_output(f, p)
+        return df
+
+    def got_plugins(plugins):
+        inner_df = defer.Deferred()
+        for plugin in plugins:
+            logger.debug("-> Creating vector for %r %r", file, plugin)
+            inner_df.addCallback(gpo, audio_file, plugin)
+            inner_df.addCallback(keep_result)
+
+        inner_df.addCallback(done)
+        inner_df.callback(None)
+        return inner_df
+
+    df = get_plugins()
+    df.addCallback(got_plugins)
+
+    return outer_df
+
+def update_vector(audio_file):
+    """ Create or Replace the current PluginOutput objects for the
+    provided audio file.
+
+    @param audio_file: the audio file to run the plugins on
     @type  audio_file: AudioFile
     """
     logger.debug("------\n -> Beginning update vector")
@@ -776,7 +810,7 @@ def update_vector(plugin, audio_file):
         logger.debug("Plugin Output Created and Saved. Calling back now. %r", val)
         outer_df.callback(None)
 
-    def save_plugin_output(vector):
+    def save_plugin_output(vector, plugin):
         po = PluginOutput(vector, plugin.get_key(), audio_key)
         df = save(po)
         df.addCallback(done)
@@ -792,7 +826,8 @@ def update_vector(plugin, audio_file):
         return df
 
     def error(failure):
-        logger.debug("Error getting vector from contact. MSG: %s", failure.getErrorMessage())
+        logger.debug("Error getting vector from contact. MSG: %s",
+                failure.getErrorMessage())
         df = calculate_vector_yourself(None)
         return df
 
@@ -814,7 +849,7 @@ def update_vector(plugin, audio_file):
             # we're through!
             logger.debug("transaction complete!")
             return None
-        elif int(time()) - struct['timestamp'] > 45:
+        elif int(time()) - struct['timestamp'] > offload_result_timeout:
             # timed out. just calculate it yourself
             logger.debug("Transaction timed out. do it yourself.")
             df = calculate_vector_yourself(None)
@@ -824,7 +859,7 @@ def update_vector(plugin, audio_file):
             df = _network_handler.node.pollOffloadedCalculation(audio_key, struct)
             df.addBoth(polled)
 
-    poll_cb = partial(reactor.callLater, 10, poll)
+    poll_cb = partial(reactor.callLater, offload_poll_wait, poll)
 
     def request_accepted(contact):
         logger.debug("REQUEST ACCEPTED!!")
