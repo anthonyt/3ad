@@ -28,7 +28,9 @@ class KeyAggregator(object):
         self.tuple_list = tuple_list
         self.key_lists = []
 
-    def go(self, callback):
+    def go(self):
+        outer_df = defer.Deferred()
+
         def got_tuples(tuples):
             keys = [t[1] for t in tuples]
 
@@ -42,9 +44,9 @@ class KeyAggregator(object):
                 for ks in self.key_lists[1:]:
                     keys = keys.intersection(ks)
 
-                callback(list(keys))
+                outer_df.callback(list(keys))
 
-        def cache_tuples(dTuple, result_tuples):
+        def cache_tuples(result_tuples, dTuple):
             if result_tuples is None:
                 result_tuples = []
             # add these tuples to the cache!!
@@ -60,7 +62,10 @@ class KeyAggregator(object):
                 got_tuples(result_tuples)
             else:
                 # if there are no cached results, get new results
-                self.net_handler.dht_get_tuples(dTuple, partial(cache_tuples, dTuple))
+                df = self.net_handler.dht_get_tuples(dTuple)
+                df.addCallback(cache_tuples, dTuple)
+
+        return outer_df
 
 
 class ObjectAggregator(object):
@@ -74,7 +79,9 @@ class ObjectAggregator(object):
         self.key_list = key_list
         self.objects = []
 
-    def go(self, callback):
+    def go(self):
+        outer_df = defer.Deferred()
+
         def got_value(value):
             # append this value to our list
             obj = self.net_handler.obj_from_row(value)
@@ -83,7 +90,7 @@ class ObjectAggregator(object):
             # if we have got all the values we asked for
             # call the callback function
             if len(self.objects) == len(self.key_list):
-                callback(self.objects)
+                outer_df.callback(self.objects)
 
         # for each key, run our got_value function on the value row
         for key in self.key_list:
@@ -95,8 +102,10 @@ class ObjectAggregator(object):
                     # FIXME: this could well be a race condition with the similar statement above
                     callback(self.objects)
             else:
-                self.net_handler.dht_get_value(key, got_value)
+                df = self.net_handler.dht_get_value(key)
+                df.addCallback(got_value)
 
+        return outer_df
 
 
 class NetworkHandler(object):
@@ -136,7 +145,7 @@ class NetworkHandler(object):
         return h.digest()
 
 
-    def dht_get_value(self, key, callback):
+    def dht_get_value(self, key):
         def success(result):
             # return a useful value
             if type(result) == dict:
@@ -146,13 +155,12 @@ class NetworkHandler(object):
 
         def error(failure):
             logger.debug("-> An error occurred: %s", failure.getErrorMessage())
-            callback(None)
+            return None
 
         df = self.node.iterativeFindValue(key)
         # use the "success" function to filter our result before
         # passing it to the callback
         df.addCallback(success)
-        df.addCallback(callback)
 #        df.addErrback(error)
         return df
 
@@ -168,17 +176,17 @@ class NetworkHandler(object):
         return df
 
 
-    def dht_get_tuples(self, dTuple, callback):
+    def dht_get_tuples(self, dTuple):
         def success(result):
             """
             @type result  tuple or None
             """
             logger.debug("SUCCESS? -> %r", result)
-            callback(result)
+            return result
 
         def error(failure):
             logger.debug("-> an error occurred: %s", failure.getErrorMessage())
-            callback(None)
+            return None
 
 #        logger.debug("-> searching for tuples based on %r", dTuple)
         df = self.node.readIfExists(dTuple, 0)
@@ -223,29 +231,36 @@ class NetworkHandler(object):
         return df
 
 
-    def get_objects_matching_tuples(self, tuple_list, callback):
+    def get_objects_matching_tuples(self, tuple_list):
         """
         Return a list of the appropriate objects for each object row
         that matches all of the provided search tuples in the tuple_list
 
         NB: providing an empty tuple list will result in no callback being fired
         """
+        outer_df = defer.Deferred()
+
         def got_keys(keys):
             if len(keys) == 0:
                 logger.debug("-> KA object found nothing.")
-                callback([])
+                outer_df.callback([])
             else:
                 # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
                 logger.debug("-> KA object found %d keys. Making a OA object with key list.", len(keys))
                 ta = ObjectAggregator(self, keys)
-                ta.go(callback)
+                ta_df = ta.go()
+                ta_df.addCallback(outer_df.callback)
 
         logger.debug("-> Making a KA object with tuple list: %r", tuple_list)
         ka = KeyAggregator(self, tuple_list)
-        ka.go(got_keys)
+        ka_df = ka.go()
+        ka_df.addCallback(got_keys)
 
-    def get_object_matching_tuples(self, tuple_list, callback):
+        return outer_df
+
+
+    def get_object_matching_tuples(self, tuple_list):
         """
         Return a single object representing the first object row
         that matches all of the provided search tuples in the tuple_list
@@ -254,11 +269,13 @@ class NetworkHandler(object):
         """
         def pick_one(obj_list):
             if len(obj_list) > 0:
-                callback(obj_list[0])
+                return obj_list[0]
             else:
-                callback(None)
+                return None
 
-        self.get_objects_matching_tuples(tuple_list, pick_one)
+        df = self.get_objects_matching_tuples(tuple_list)
+        df.addCallback(pick_one)
+        return df
 
 
     def cache_get_obj(self, key):
@@ -563,8 +580,8 @@ class PluginOutput(ad3.models.abstract.PluginOutput, SaveableModel):
 
 
 
-def get_tags(callback, name = None, audio_file = None, guessed_file = None):
-    """ Return a list of Tag objects to the provided callback function
+def get_tags(name = None, audio_file = None, guessed_file = None):
+    """ Return a deferred, which will be called back with a list of Tag objects.
     By default returns all tags.
 
     @param name: return only tags with tag.name matching provided name
@@ -575,9 +592,6 @@ def get_tags(callback, name = None, audio_file = None, guessed_file = None):
 
     @param guessed_file: return only tags that have been guessed for this audio file
     @type  guessed_file: AudioFile object
-
-    @param callback: callback function to pass the results to
-    @type  callback: function
     """
     search_tuples = [ ("tag", None, name) ]
     if audio_file is not None:
@@ -585,19 +599,21 @@ def get_tags(callback, name = None, audio_file = None, guessed_file = None):
     if guessed_file is not None:
         search_tuples.append( ("tag", None, "guessed_file", guessed_file.get_key()) )
 
-    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_objects_matching_tuples(search_tuples)
+    return df
 
-def get_tag(callback, name):
-    """ Returns a single Tag object to the provided callback function.
-    If no such Tag exists in the data store, passes None to the callback function.
+def get_tag(name):
+    """ Returns a deferred, which will be called back with a single Tag object.
+    If no such Tag exists in the data store, passes None to the callback.
 
     @param name: the name of the tag object to return
     @type  name: unicode
     """
     search_tuples = [("tag", None, name)]
-    return _network_handler.get_object_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_object_matching_tuples(search_tuples)
+    return df
 
-def get_plugin_outputs(callback, audio_file=None, plugin=None):
+def get_plugin_outputs(audio_file=None, plugin=None):
     if audio_file is not None:
         audio_key = audio_file.get_key()
     else:
@@ -608,14 +624,16 @@ def get_plugin_outputs(callback, audio_file=None, plugin=None):
         plugin_key = None
 
     search_tuples = [ ("plugin_output", None, plugin_key, audio_key) ]
-    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_objects_matching_tuples(search_tuples)
+    return df
 
-def get_plugin_output(callback, audio_file, plugin):
+def get_plugin_output(audio_file, plugin):
     search_tuples = [ ("plugin_output", None, plugin.get_key(), audio_file.get_key()) ]
-    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_objects_matching_tuples(search_tuples)
+    return df
 
-def get_plugins(callback, name = None, module_name = None, plugin_output = None):
-    """ Return a list of Plugin objects to the provided callback function
+def get_plugins(name = None, module_name = None, plugin_output = None):
+    """ Returns a deferred, which will be called back with a list of Plugin objects.
     By default returns all plugins.
 
     @param name: if provided, returns only plugins with a matching name
@@ -626,17 +644,15 @@ def get_plugins(callback, name = None, module_name = None, plugin_output = None)
 
     @param plugin_output: if provided, returns only the plugin associated with this object
     @type  plugin_output: PluginOutput object
-
-    @param callback: a callback function to pass the results to
-    @type  callback: function
     """
     search_tuples = [ ("plugin", None, name, module_name) ]
     if plugin_output is not None:
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.get_key()) )
-    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_objects_matching_tuples(search_tuples)
+    return df
 
-def get_plugin(callback, name = None, module_name = None, plugin_output = None):
-    """ Return a single Plugin object to the provided callback function.
+def get_plugin(name = None, module_name = None, plugin_output = None):
+    """ Return a deferred, which will be called back with a single Plugin object.
 
     @param name: if provided, returns only plugins with a matching name
     @type  name: unicode
@@ -646,17 +662,14 @@ def get_plugin(callback, name = None, module_name = None, plugin_output = None):
 
     @param plugin_output: if provided, returns only the plugin associated with this object
     @type  plugin_output: PluginOutput object
-
-    @param callback: a callback function to pass the results to
-    @type  callback: function
     """
     search_tuples = [ ("plugin", None, name, module_name) ]
     if plugin_output is not None:
         search_tuples.append( ("plugin", None, "plugin_output", plugin_output.get_key()) )
-    return _network_handler.get_object_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_object_matching_tuples(search_tuples)
 
-def get_audio_files(callback, file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
-    """ Return a list of AudioFile objects to the provided callback function.
+def get_audio_files(file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
+    """ Return a deferred, which will be called back with a list of AudioFile objects.
     By default returns all audio files.
 
     @param file_name: if provided, returns only files with a matching file name
@@ -673,9 +686,6 @@ def get_audio_files(callback, file_name=None, user_name=None, tag=None, guessed_
 
     @param plugin_output: if provided, returns only the file associated with this output
     @type  plugin_output: PluginOutput object
-
-    @param callback: a callback function to pass the results to
-    @type  callback: function
     """
     search_tuples = [ ("audio_file", None, file_name, user_name) ]
     if tag is not None:
@@ -685,10 +695,11 @@ def get_audio_files(callback, file_name=None, user_name=None, tag=None, guessed_
     if plugin_output is not None:
         search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.get_key()) )
 
-    return _network_handler.get_objects_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_objects_matching_tuples(search_tuples)
+    return df
 
-def get_audio_file(callback, file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
-    """ Return a list of AudioFile objects to the provided callback function.
+def get_audio_file(file_name=None, user_name=None, tag=None, guessed_tag=None, plugin_output=None):
+    """ Returns a deferred, which will be called back with a list of AudioFile objects.
     By default returns all audio files.
 
     @param file_name: if provided, returns only files with a matching file name
@@ -705,9 +716,6 @@ def get_audio_file(callback, file_name=None, user_name=None, tag=None, guessed_t
 
     @param plugin_output: if provided, returns only the file associated with this output
     @type  plugin_output: PluginOutput object
-
-    @param callback: a callback function to pass the results to
-    @type  callback: function
     """
     search_tuples = [ ("audio_file", None, file_name, user_name) ]
     if tag is not None:
@@ -717,7 +725,8 @@ def get_audio_file(callback, file_name=None, user_name=None, tag=None, guessed_t
     if plugin_output is not None:
         search_tuples.append( ("audio_file", None, "plugin_output", plugin_output.get_key()) )
 
-    return _network_handler.get_object_matching_tuples(search_tuples, callback)
+    df = _network_handler.get_object_matching_tuples(search_tuples)
+    return df
 
 
 def save(obj):
