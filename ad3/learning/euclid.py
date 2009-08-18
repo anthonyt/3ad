@@ -19,30 +19,27 @@ class Euclidean(object):
 
 
     def calculate_tag_vector(self, tag):
-        outer_df = defer.Deferred()
-
         def got_files(files):
             vector = mean([f.vector for f in files], axis=0).tolist()
-            outer_df.callback(vector)
+            return vector
 
-        self.model.get_audio_files(got_files, tag = tag)
+        df = self.model.get_audio_files(tag = tag)
+        df.addCallback(got_files)
+        return df
 
-        return outer_df
 
-
-    def calculate_file_vector(self, callback, file):
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
+    def calculate_file_vector(self, file):
         def got_outputs(plugin_outputs):
+            c = lambda a, b: cmp(a.plugin_key, b.plugin_key)
             vector = []
-            for po in plugin_outputs:
+            # sort the plugin_outputs by plugin key.
+            for po in sorted(plugin_outputs, c):
                 vector.extend(po.vector)
-            outer_df.callback(vector)
+            return vector
 
-        self.model.get_plugin_outputs(got_outputs, audio_file=file)
-
-        return outer_df
+        df = self.model.get_plugin_outputs(audio_file=file)
+        df.addCallback(got_outputs)
+        return df
 
 
     def does_tag_match(self, file, tag):

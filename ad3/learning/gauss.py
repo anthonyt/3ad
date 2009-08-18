@@ -11,33 +11,29 @@ class Gaussian(object):
         self.tolerance = tolerable_distance
 
 
-    def calculate_tag_vector(self, callback, tag):
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
+    def calculate_tag_vector(self, tag):
         def got_files(files):
             vectors = [f.vector for f in files]
             tag_vector = train(vectors)
-            outer_df.callback(tag_vector)
+            return tag_vector
 
-        self.model.get_audio_files(got_files, tag = tag)
-
-        return outer_df
+        df = self.model.get_audio_files(tag = tag)
+        df.addCallback(got_files)
+        return df
 
 
     def calculate_file_vector(self, file):
-        logger.debug("Calculating File Vector!")
-        outer_df = defer.Deferred()
-
         def got_outputs(plugin_outputs):
+            c = lambda a, b: cmp(a.plugin_key, b.plugin_key)
             vector = []
-            for po in plugin_outputs:
+            # sort the plugin_outputs by plugin key.
+            for po in sorted(plugin_outputs, c):
                 vector.extend(po.vector)
-            outer_df.callback(vector)
+            return vector
 
-        self.model.get_plugin_outputs(got_outputs, audio_file=file)
-
-        return outer_df
+        df = self.model.get_plugin_outputs(audio_file=file)
+        df.addCallback(got_outputs)
+        return df
 
 
     def does_tag_match(self, file, tag):

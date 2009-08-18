@@ -21,43 +21,32 @@ class TagAggregator(object):
         self.tag_objs = []
         self.num_tags_got = 0
 
-    def go(self, callback):
-        df = defer.Deferred()
-        outer_df = defer.Deferred()
+    def go(self):
+        def done(val):
+            return self.tag_objs
 
-        def handle_tag(val, name, t):
+        def handle_tag(tag, name):
             # only create the missing tag if force_creation is enabled
-            if t is None and self.force_creation:
-                t = Tag(name)
-                save_df = self.model.save(t)
+            if tag is None and self.force_creation:
+                tag = Tag(name)
+                save_df = self.model.save(tag)
             else:
                 save_df = None
 
-            if t is not None:
-                self.tag_objs.append(t)
+            if tag is not None:
+                self.tag_objs.append(tag)
 
             return save_df
 
-        def callback_wrapper(val):
-            callback(self.tag_objs)
+        dfs = []
+        for name in self.tag_names:
+            t_df = self.model.get_tag(name)
+            t_df.addCallback(handle_tag, name)
+            dfs.append(t_df)
 
-        def done(val):
-            outer_df.addCallback(callback_wrapper)
-            outer_df.callback('fired outer tagaggregator')
-
-        def got_tag(name, t):
-            df.addCallback(handle_tag, name, t)
-            self.num_tags_got += 1
-            # if this is the last tag in the lot...
-            if self.num_tags_got == len(self.tag_names):
-                df.addCallback(done)
-                df.callback(None)
-
-        for tag in self.tag_names:
-            f = partial(got_tag, tag)
-            self.model.get_tag(f, tag)
-
-        return outer_df
+        list_df = defer.DeferredList(dfs)
+        list_df.addCallback(done)
+        return list_df
 
 class FileAggregator(object):
     def __init__(self, controller, model, tag_list, user_name=None):
@@ -69,11 +58,8 @@ class FileAggregator(object):
         self.num_got_files = 0
         self.file_lists = {}
 
-    def go(self, callback):
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
-        def got_all_files():
+    def go(self):
+        def got_all_files(val):
             # find the Set of files such that every file belongs to every tag
             files = None
             for tag_name in self.file_lists:
@@ -83,30 +69,28 @@ class FileAggregator(object):
                 else:
                     files = files.intersection(self.file_lists[tag_name])
 
-            # start the callback chain
-            outer_df.callback(list(files))
+            return list(files)
 
-        def got_files(tag_name, files):
+        def got_files(files, tag_name):
             if files is not None:
                 self.file_lists[tag_name].extend(files)
-            self.num_got_files += 1
 
-            # if we have got all the values we asked for,
-            # find the common keys, and call the callback function
-            if self.num_got_files == 2*len(self.tag_list):
-                got_all_files()
+        dfs = []
+        for tag in self.tag_list:
+            self.file_lists[tag.name] = []
 
+            df_t = self.model.get_audio_files(tag=tag, user_name=self.user_name)
+            df_t.addCallback(got_files, tag.name)
+            dfs.append(df_t)
 
-        if len(self.tag_list) < 1:
-            outer_df.addCallback(callback_wrapper, [])
-            outer_df.callback(None)
-        else:
-            for tag in self.tag_list:
-                self.file_lists[tag.name] = []
-                self.model.get_audio_files(partial(got_files, tag.name), tag=tag, user_name=self.user_name)
-                self.model.get_audio_files(partial(got_files, tag.name), guessed_tag=tag, user_name=self.user_name)
+            df_g = self.model.get_audio_files(guessed_tag=tag, user_name=self.user_name)
+            df_g.addCallback(got_files, tag.name)
+            dfs.append(df_g)
 
-        return outer_df
+        list_df = defer.DeferredList(dfs)
+        list_df.addCallback(got_all_files)
+
+        return list_df
 
 
 class Controller(object):
@@ -118,131 +102,96 @@ class Controller(object):
     def initialize_storage(self, callback):
         self.model.initialize_storage(callback)
 
-    def update_tag_vectors(self, callback, tag_name = None):
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
-        df = defer.Deferred()
+    def update_tag_vectors(self, tag_name = None):
+        def got_vector(vector, tag):
+            tag.vector = vector
+            logger.debug("-> Saving vector for %r", tag)
+            s_df = self.model.save(tag)
+            return s_df
 
         # Update the vector for every tag, based on the new output
         def got_tags(tags):
-            c = [0]
-            def got_vector(tag, vector):
-                tag.vector = vector
-                def save_tag(val):
-                    logger.debug("-> Saving vector for %r", tag)
-                    s_df = self.model.save(tag)
-                    return s_df
-
-                df.addCallback(save_tag)
-
-                c[0] += 1
-                # track the iteration. if this is the last one, trigger the outer_df
-                if c[0] == len(tags):
-                    df.addCallback(outer_df.callback)
-
+            dfs = []
             for tag in tags:
-                def get_vector(val, tag):
-                    logger.debug("-> Fetching vector for %r", tag)
-                    cb = partial(got_vector, tag)
-                    t_df = self.mine.calculate_tag_vector(cb, tag)
-                    return t_df
-                df.addCallback(get_vector, tag)
+                logger.debug("-> Fetching vector for %r", tag)
+                cb = partial(got_vector, tag)
+                t_df = self.mine.calculate_tag_vector(tag)
+                t_df.addCallback(got_vector, tag)
 
-            df.callback(None)
+            list_df = defer.DeferredList(dfs)
+            return list_df
 
-        self.model.get_tags(got_tags, name=tag_name)
 
-        return outer_df
+        df = self.model.get_tags(name=tag_name)
+        df.addCallback(got_tags)
+        return df
 
 
     def create_vectors(self, file, plugin_name=None):
-        outer_df = defer.Deferred()
-        #    get_plugins
-        # -> got_plugins
-        # -> update_plugin_vector (for each plugin)
-        # -> calculate_file_vector
-        # -> got_file_vector (save file)
-        # -> outer_df.callback
-
-        def calculate_file_vector(val):
+        def update_file_vector(val):
             # this deferred will pass the calculated vector onto the next callback
             df = self.mine.calculate_file_vector(file)
             return df
 
-        def got_plugins(plugins):
-            deferreds = []
-            for plugin in plugins:
-                logger.debug("-> Creating vector for %r %r", file, plugin)
-                df = self.model.update_vector(plugin, file)
-                deferreds.append(df)
-
-            df_list = defer.DeferredList(deferreds, consumeErrors=1)
-            df_list.addCallback(calculate_file_vector)
-            df_list.addCallback(outer_df.callback)
-
-        self.model.get_plugins(got_plugins, name=plugin_name)
-
-        return outer_df
+        df = self.model.update_vector(file)
+        df.addCallback(update_file_vector)
+        return df
 
 
 
-    def guess_tags(self, callback, audio_file=None, user_name=None):
-        df = defer.Deferred()
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
+    def guess_tags(self, audio_file=None, user_name=None):
+        # We use a list to allow modification of the tags variable
+        # from within the functions defined below.
+        scoped_tags = [0]
 
-        def guess_tag(val, file, tag):
-            df = self.model.guess_tag_for_file(file, tag)
-            return df
+        def got_files(files):
+            tags = scoped_tags[0]
 
-        def got_data(tags, files):
+            dfs = []
             for file in files:
                 for tag in tags:
                     if self.mine.does_tag_match(file, tag):
                         logger.debug("-> GENERATED: %r %r", file, tag)
-                        df.addCallback(guess_tag, file, tag)
-
-            df.addCallback(outer_df.callback)
+                        df = self.model.guess_tag_for_file(file, tag)
+                        dfs.append(df)
+            list_df = defer.DeferredList(dfs)
+            return list_df
 
         def got_tags(tags):
+            scoped_tags[0] = tags
+
             # take care of fetching the tag and audio file objects...
             if audio_file is None:
-                self.model.get_audio_files(partial(got_data, tags), user_name=user_name)
+                f_df = self.model.get_audio_files(user_name=user_name)
             else:
-                got_data(tags, [audio_file])
+                f_df = defer.Deferred()
+                f_df.callback([audio_file])
 
-        def get_tags(val):
-            self.model.get_tags(got_tags)
-
-        def remove_old(val):
-            df = self.model.remove_guessed_tags()
+            df.addCallback(got_files)
             return df
 
-        df.addCallback(remove_old)
-        df.addCallback(get_tags)
-        df.callback(None)
+        def get_tags(val):
+            df = self.model.get_tags()
+            return df
 
-        return outer_df
+        df = self.model.remove_guessed_tags()
+        df.addCallback(get_tags)
+        df.addCallback(got_tags)
+        df.addCallback(got_files)
+        return df
 
     def add_files(self, file_names, user_name, tags=None):
-        outer_df = defer.Deferred()
-        file_save_df = defer.Deferred()
-        file_save_df.callback(None)
-
-        num_files = len(file_names) - 1
-        num_got = [0]
         result_tuples = {}
 
         def done(val):
             logger.debug("Calling back outer_df with %r", result_tuples)
-            outer_df.callback(result_tuples)
+            return result_tuples
 
         if tags is None:
             tags = []
 
-        def got_file(file_name, file):
-            last_one = False
+        def got_file(file, file_name):
+            inner_df = defer.Deferred()
 
             if file is not None:
                 # file already exists
@@ -254,71 +203,83 @@ class Controller(object):
 
                 def save_file(val):
                     logger.debug("--> Saving %r", file_name)
-                    if last_one:
-                        logger.debug("--------- lastone callback'd!")
-                        file_save_df.addCallback(done)
-
                     save_df = self.model.save(file)
                     return save_df
 
                 def apply_vector(vector):
                     logger.debug("--> Applying vector to %r %r", file_name, vector)
                     file.vector = vector
+                    return None
 
-                    # return a reference to the save_file function
-                    return save_file
+                inner_df.addCallback(self.create_vectors) # passes the vector to the next callback
+                inner_df.addCallback(apply_vector)
+                inner_df.addCallback(save_file)
 
-                df = defer.Deferred()
-                df.addCallback(self.create_vectors) # passes the vector to the next callback
-                df.addCallback(apply_vector) # passes the save function to the next callback
-                df.addCallback(file_save_df.addCallback) # append our save function to the queue
-
-                if len(tags) > 0:
+                # After the file has been saved, apply the tags to it!
+                # TODO: we shouldn't get_tags for each file individually. Do it once, before saving any files.
+                if tags:
                     def got_tags(tags):
+                        # Make sure that each apply_tag_to_file call does not overlap
+                        # FIXME: Not sure if we need this now that the network
+                        #        is tolerant of packet loss.
                         def apply(value, file, tag):
                             logger.debug("Attempting to apply: %r to %r ", tag, file)
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
+                        df = defer.Deferred()
                         for t in tags:
-                            file_save_df.addCallback(apply, file, t)
+                            df.addCallback(apply, file, t)
+                        df.callback(None)
+                        return df
 
                     def get_tags(val):
                         ta = TagAggregator(self, self.model, tags, True)
-                        ta_df = ta.go(got_tags)
+                        ta_df = ta.go()
                         return ta_df
 
-                    file_save_df.addCallback(get_tags)
+                    inner_df.addCallback(get_tags)
+                    inner_df.addCallback(got_tags)
 
                 # Pass "file" to our first callback
-                df.callback(file)
+                inner_df.callback(file)
 
-            # If this is the last iteration...
-            last_one = (num_got[0] >= num_files)
-            num_got[0] += 1
+                # inner_df will 'callback', as far as the calling function is
+                # concerned, either after the file is saved, or after all tags
+                # have been applied, depending on the presence of a tags list
+                return inner_df
 
-            if last_one:
-                logger.debug("--> LAST ONE! num_got = %r", num_got[0])
-                pass
-
+        dfs = []
         for file_name in file_names:
             logger.debug("Getting audio file...")
-            self.model.get_audio_file(partial(got_file, file_name), file_name=file_name, user_name=user_name)
+            df = self.model.get_audio_file(file_name=file_name, user_name=user_name)
+            df.addCallback(got_file, file_name)
+            dfs.append(df)
 
-        return outer_df
+        # All got_file calls will return a deferred. Because of this,
+        # list_df.callback() isn't called until all got_file calls are
+        # finished with their business.
+        list_df = defer.DeferredList(dfs)
+        list_df.addCallback(done)
+        return list_df
 
 
-
-    def add_file(self, callback, file_name, user_name=None, tags=None):
-        df = defer.Deferred()
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
+    def add_file(self, file_name, user_name=None, tags=None):
+        # TODO: Make this just a wrapper method for add_files()
 
         if tags is None:
             tags = []
 
         def got_file(file):
-            if file is None:
+            inner_df = defer.Deferred()
+            if file is not None:
+                # if a matching file already exists, return it through
+                # the deferred
+                inner_df.callback((file, False))
+            else:
+                # Otherwise, we'll return a deferred, which will eventually
+                # return (file, True), after creating it and adding tags.
+
                 file = AudioFile(file_name, user_name=user_name)
 
                 def save_file(vector):
@@ -331,131 +292,119 @@ class Controller(object):
                     return vector
 
                 def done(val):
-                    outer_df.callback((file, True))
+                    return (file, True)
 
-                df.addCallback(self.create_vectors)
-                df.addCallback(lmk)
-                df.addCallback(save_file)
+                inner_df.addCallback(self.create_vectors)
+                inner_df.addCallback(lmk)
+                inner_df.addCallback(save_file)
 
-                if len(tags) == 0:
-                    df.addCallback(done)
-                else:
+                # After the file has been saved, apply the tags to it!
+                # TODO: we shouldn't get_tags for each file individually. Do it once, before saving any files.
+                if tags:
                     def got_tags(tags):
+                        # Make sure that each apply_tag_to_file call does not overlap
+                        # FIXME: Not sure if we need this now that the network
+                        #        is tolerant of packet loss.
                         def apply(value, file, tag):
                             logger.debug("Attempting to apply: %r", tag)
                             tag_df = self.model.apply_tag_to_file(file, tag)
                             return tag_df
 
+                        tag_df = defer.Deferred()
                         for t in tags:
-                            df.addCallback(apply, file, t)
-
-                        df.addCallback(done)
+                            tag_df.addCallback(apply, file, t)
+                        tag_df.callback(None)
+                        return tag_df
 
                     def get_tags(val):
                         ta = TagAggregator(self, self.model, tags, True)
-                        ta_df = ta.go(got_tags)
+                        ta_df = ta.go()
                         return ta_df
 
-                    df.addCallback(get_tags)
+                    inner_df.addCallback(get_tags)
+                    inner_df.addCallback(got_tags)
 
-                # Pass "file" to our first callback
-                df.callback(file)
-            else:
-                # if a matching file already exists, return None to the callback method
-                # and signal outer_df as being completed.
-                outer_df.callback((file, False))
+                inner_df.addCallback(done)
 
-        self.model.get_audio_file(got_file, file_name=file_name, user_name=user_name)
-        return outer_df
+                # Pass "file" to our first callback (create_vectors)
+                inner_df.callback(file)
+            return inner_df
+
+        df = model.get_audio_file(file_name=file_name, user_name=user_name)
+        df.addCallback(got_file)
+        return df
 
 
-    def tag_files(self, callback, file_list, tag_names=[]):
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
+    def tag_files(self, file_list, tag_names=[]):
         def apply_tag(val, file, tag):
             a_df = self.model.apply_tag_to_file(file, tag)
             return a_df
 
         def got_tags(tags):
+            inner_df = defer.Deferred()
             for t in tags:
                 for file in file_list:
-                    df.addCallback(apply_tag, file, t)
-
-            df.addCallback(outer_df.callback)
+                    inner_df.addCallback(apply_tag, file, t)
+            inner_df.callback(None)
+            return inner_df
 
         def get_tags(val):
             ta = TagAggregator(self, self.model, tag_names, True)
-            ta_df = ta.go(got_tags)
+            ta_df = ta.go()
             return ta_df
 
+        outer_df = defer.Deferred()
         if len(tag_names) == 0:
             outer_df.callback(None)
         else:
             df = defer.Deferred()
             df.addCallback(get_tags)
+            df.addCallback(got_tags)
+            df.addCallback(outer_df.callback)
             df.callback(None)
 
         return outer_df
 
 
-    def add_plugin(self, callback, name, module_name):
+    def add_plugin(self, name, module_name):
         outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
-        df = defer.Deferred()
 
         def got_plugin(plugin):
             if plugin is None:
                 # If the plugin doesn't exist, create it and return it to the callback
                 plugin = Plugin(name, module_name)
 
-                def save_plugin(val):
-                    s_df = self.model.save(plugin)
-                    return s_df
-
                 def done(val):
                     outer_df.callback(plugin)
 
-                df.addCallback(save_plugin)
+                df = self.model.save(plugin)
                 df.addCallback(done)
-
-                df.callback(None)
             else:
                 # If it does exist, return None to the callback.
                 outer_df.callback(None)
 
-        self.model.get_plugin(got_plugin, name=name, module_name=module_name)
+        df = self.model.get_plugin(name=name, module_name=module_name)
+        df.addCallback(got_plugin)
 
         return outer_df
 
 
-    def find_files_by_tags(self, callback, tag_names, user_name=None):
-        outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
-        def got_files(files):
-            outer_df.callback(files)
-
+    def find_files_by_tags(self, tag_names, user_name=None):
         def got_tags(tags):
             if len(tags) != len(tag_names):
                 # if we got back fewer tags than we searched for,
                 # it means that not all tags exist. thus no file will have all those tags
                 # thus we can stop looking
-                outer_df.callback([])
-                return None
+                return []
             else:
+                # fa_df will eventually return a list of files.
                 fa = FileAggregator(self, self.model, tags, user_name=user_name)
-                fa_df = fa.go(got_files)
+                fa_df = fa.go()
                 return fa_df
 
-        def get_tags():
-            ta = TagAggregator(self, self.model, tag_names, False)
-            ta_df = ta.go(got_tags)
-            return ta_df
-
         # start searching...
-        get_tags()
-
-        return outer_df
+        ta = TagAggregator(self, self.model, tag_names, False)
+        df = ta.go()
+        df.addCallback(got_tags)
+        return df
 
