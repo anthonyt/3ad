@@ -1,25 +1,17 @@
-import ad3.models.abstract
+# system
 import simplejson
-import hashlib
-import urllib
-import tempfile
 import random
-import os
+from functools import partial
+# entangled
 import entangled
 import entangled.dtuple
-import entangled.kademlia.contact
-import entangled.kademlia.msgtypes
-from mutex import mutex
 from entangled.kademlia.node import rpcmethod
-from entangled.kademlia.protocol import KademliaProtocol
-from time import time
-from sets import Set
+# twisted
 from twisted.internet.reactor import listenTCP
-from twisted.internet.protocol import ClientCreator
 from twisted.internet import defer
 from twisted.internet import reactor
 from twisted.internet import threads
-from functools import partial
+# 3ad
 import protocol
 import logging
 logger = logging.getLogger('3ad')
@@ -34,62 +26,26 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             routingTable=routingTable, networkProtocol=networkProtocol
         )
 
-        self.oobPort = tcpPort
+        self.tcpPort = tcpPort
         self._oobListeningPort = None
-        self._oobFactory = None
-        self._oobProtocol = oobProtocol
-        self._oobMutex = mutex()
-        self._oobRequestsPending = {}
+        self._oobServerFactory = None
 
     def joinNetwork(self, knownNodeAddresses=None):
         entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
             self, knownNodeAddresses=knownNodeAddresses
         )
 
-        self._oobServerFactory = protocol.ServerFactory(node=self)
-        self._oobClientFactory = protocol.ClientFactory(
-            reactor=reactor,
-            node=self
-        )
+        self._oobServerFactory = protocol.HTTPServerFactory()
         self._oobListeningPort = \
-            listenTCP(self.oobPort, self._oobServerFactory)
-
-    def addPendingOOBRequest(self, contact, file_key):
-        self._oobRequestsPending[file_key] = contact
-
-        # Set a timeout to remove the listener,
-        # if it has not already been removed
-        oobTimeout = 5
-        reactor.callLater(oobTimeout, 
-            self.checkPendingOOBRequest, contact, file_key)
-
-    def checkPendingOOBRequest(self, contact, file_key):
-        if self._oobRequestsPending.get(file_key, None) == contact:
-            del self._oobRequestsPending[file_key]
-            return True
-
-        return False
-
-    def createOOBClient(self, contact, file_key):
-        # df will be called back with the client instance
-        # as soon as it is created
-        df = self._oobClientFactory.connectTCP(
-            contact.address, contact.port, file_key=file_key
-        )
-        return df
+            listenTCP(self.tcpPort, self._oobServerFactory)
 
     def sendOffloadCommand(self, key, struct):
-        hash = {
-            'file_uri': struct['file_uri']
-        }
-        value = simplejson.dumps(hash)
-
         def executeRPC(nodes):
             contact = random.choice(nodes)
             logger.debug("SENDING RPC TO: %r", contact)
             struct['contact'] = contact
 
-            df = contact.offload(key, value, self.id)
+            df = contact.offload(key, struct['file_uri'])
             return df
 
         # Find k nodes closest to the key...
@@ -99,92 +55,87 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         return df
 
     def pollOffloadedCalculation(self, key, struct):
-        hash = {
-            'file_uri': struct['file_uri']
-        }
-        value = simplejson.dumps(hash)
-
         def update_struct(val):
             response = simplejson.loads(val)
             struct['complete'] = response['complete']
             struct['failed'] = response['failed']
             struct['vector'] = response['vector']
 
-        df = struct['contact'].poll(key, value, self.id)
+        df = struct['contact'].poll(key, struct['file_uri'])
         df.addCallback(update_struct)
 
         return df
 
     @rpcmethod
-    def offload(self, key, value, originalPublisherID=None, **kwargs):
+    def offload(self, key, file_uri, _rpcNodeID, _rpcNodeContact, **kwargs):
         logger.debug("-------------")
-        hash = simplejson.loads(value)
 
-        plugin_module = hash['module_name']
-        file_uri = hash['file_uri']
-        id = plugin_module + file_uri
         logger.debug("RECEIVED AN OFFLOAD RPC! %r %r", file_uri, plugin_module)
 
         if not hasattr(self, 'computations'):
             self.computations = {}
 
-        self.computations[id] = {
+        self.computations[key] = {
             'complete': False,
             'vector': None,
             'failed': False,
             'downloaded': False
         }
 
-        def do_computation():
+        def do_computation(file):
             try:
-                plugin = Plugin('temp', plugin_module)
-
-                logger.debug("Downloading %s", file_uri)
-                (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
-                self.computations[id]['downloaded'] = True
+                # In a perfect world there would only be one thread mucking
+                # about with self.computations[key] at the same time. So
+                # hopefully we don't have to use mutexes.
+                self.computations[key]['downloaded'] = True
 
                 logger.debug("Computing vector for %s", file_name)
-                vector = plugin.create_vector(file_name)
-                if len(vector) == 0 or len([a for a in vector if a == 0]) == len(vector):
-                    # Zero length vector or zeroed out vector is an indication that Marsyas choked.
-                    self.computations[id]['failed'] = True
-                self.computations[id]['complete'] = True
-                self.computations[id]['vector'] = vector
 
-                os.remove(file_name)
+                # Here's the real work: creating the vector.
+                vector = plugin.create_vector(file.name)
+
+                if len(vector) == 0 or\
+                        len([a for a in vector if a == 0]) == len(vector):
+                    # Zero length vector or zeroed out vector is an indication
+                    # that Marsyas choked.
+                    self.computations[key]['failed'] = True
+
+                self.computations[key]['complete'] = True
+                self.computations[key]['vector'] = vector
             except Exception:
-                logger.debug("Computation error :( %s", failure.getErrorMessage())
-                self.computations[id]['complete'] = True
-                self.computations[id]['failed'] = True
-            finally:
-                return None
+                logger.debug("Computation error :( %s",
+                        failure.getErrorMessage())
+                self.computations[key]['complete'] = True
+                self.computations[key]['failed'] = True
 
-        df = threads.deferToThread(do_computation)
+        def callback(file):
+            df = threads.deferToThread(do_computation, file)
 
-        #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
-        #file.write(value)
+        # Receive the file in the main loop, but spin processing off
+        # into its own thread.
+        logger.debug("Downloading %s", file_uri)
+        clientFactory = HTTPClientFactory(
+                callback, key, file_uri, timeout=0)
+        reactor.connectTCP(
+                _rpcNodeContact.address, self.tcpPort, clientFactory)
+
         logger.debug("OFFLOAD FINISHED")
         return "OK"
 
     @rpcmethod
-    def poll(self, key, value, originalPublisherID=None, age=0, **kwargs):
-        hash = simplejson.loads(value)
-        plugin_module = hash['module_name']
-        file_uri = hash['file_uri']
-        id = plugin_module + file_uri
-
-        if not hasattr(self, 'computations') or not self.computations.has_key(id):
+    def poll(self, key, file_uri, _rpcNodeID, _rpcNodeContact, **kwargs):
+        if not hasattr(self, 'computations') or not self.computations.has_key(key):
             # we've never heard of the requested offload operation. make something up!
             logger.debug("Returning BS poll")
             result = {'complete': True, 'vector': None, 'failed': True, 'downloaded': False}
-        elif self.computations[id]['complete']:
+        elif self.computations[key]['complete']:
             # we've finished the requested offload operation. remove if from the list and return it
             logger.debug("Returning finished poll")
-            result = self.computations.pop(id)
+            result = self.computations.pop(key)
         else:
             # we haven't finished the requested offload operation, but we have some data on it
             logger.debug("Returning unfinished poll")
-            result = self.computations[id]
+            result = self.computations[key]
 
         return simplejson.dumps(result)
 
