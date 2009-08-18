@@ -178,7 +178,7 @@ def sync(fn):
     s.__doc__ = fn.__doc__
     return s
 
-def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:', logFile='3ad.log'):
+def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile=':memory:', logFile='3ad.log'):
     """
     udpPort: int
     userName: str
@@ -191,15 +191,17 @@ def connect(udpPort=None, userName=None, knownNodes=None, dbFile=':memory:', log
 
     if udpPort is None:
         udpPort = int(sys.argv[1])
+    if tcpPort is None:
+        tcpPort = int(sys.argv[2])
     if userName is None:
-        userName = sys.argv[2]
+        userName = sys.argv[3]
     if knownNodes is None:
         knownNodes = [('127.0.0.1', 4000)]
 
     # Set up model with its network node
     model = ad3.models.dht
     dataStore = SQLiteDataStore(dbFile=dbFile)
-    node = ad3.models.dht.Node(udpPort=udpPort, dataStore=dataStore)
+    node = ad3.models.dht.Node(udpPort=udpPort, tcpPort=tcpPort, dataStore=dataStore)
 
     formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
     handler = logging.FileHandler(logFile)
@@ -580,10 +582,10 @@ def create_db_snapshot(outFile):
     con.commit()
 
 cmds = dict(
-    test_conn = partial(connect, 4000, 'anthony', dbFile='bob.sqlite'),
-    connecta = partial(connect, 4000, 'user_a', knownNodes=[('127.0.0.1', 4001)], dbFile='a.sqlite', logFile='a.log'),
-    connectb = partial(connect, 4001, 'user_b', knownNodes=[('127.0.0.1', 4000)], dbFile='b.sqlite', logFile='b.log'),
-    connectc = partial(connect, 4002, 'user_c', knownNodes=[('127.0.0.1', 4001)], dbFile='c.sqlite', logFile='c.log'),
+    test_conn = partial(connect, 4000, 4000, 'anthony', dbFile='bob.sqlite'),
+    connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=[('127.0.0.1', 4001)], dbFile='a.sqlite', logFile='a.log'),
+    connectb = partial(connect, 4001, 4001, 'user_b', knownNodes=[('127.0.0.1', 4000)], dbFile='b.sqlite', logFile='b.log'),
+    connectc = partial(connect, 4002, 4002, 'user_c', knownNodes=[('127.0.0.1', 4001)], dbFile='c.sqlite', logFile='c.log'),
     sync = sync,
     add_plugin=add_plugin,
     add_file=add_file,
