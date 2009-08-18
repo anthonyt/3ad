@@ -1,22 +1,12 @@
-#import ad3.models.abstract
-import simplejson
-import hashlib
-import urllib
+# system
 import tempfile
-import random
 import os
 import mutex
+# entangled
 import entangled
 import entangled.dtuple
-import entangled.kademlia.contact
-import entangled.kademlia.msgtypes
-from entangled.kademlia.node import rpcmethod
-from entangled.kademlia.protocol import KademliaProtocol
-from time import time
-from sets import Set
-from twisted.internet import defer
+# twisted
 from twisted.internet import reactor
-from twisted.internet import threads
 import twisted.web.http as twh
 import twisted.web.client as twc
 
@@ -104,6 +94,8 @@ class HTTPServerFactory(twh.HTTPFactory):
         self._prk_mux.unlock()
 
     def add_request_key(self, key, file_name):
+        # TODO: Add a timeout, so that no key can sit in the list for longer
+        # than x seconds
         return self._prk_mux.lock(
                 self._unsafe_add_request_key, (key, file_name)
         )
