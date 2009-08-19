@@ -444,11 +444,7 @@ def get_tags(name=None, audioFile=None, guessedAudioFile=None):
     @type  guessedAudioFile: AudioFile object
     """
     n = p.terminalProtocol.namespace
-    df = defer.Deferred()
-
-    def f(v):
-        df.callback(v)
-    n['controller'].model.get_tags(f, name=name, audio_file=audioFile, guessed_file=guessedAudioFile)
+    df = n['controller'].model.get_tags(name=name, audio_file=audioFile, guessed_file=guessedAudioFile)
     return df
 
 @cont
