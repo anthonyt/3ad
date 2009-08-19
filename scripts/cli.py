@@ -602,6 +602,10 @@ cmds = dict(
     connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=[('127.0.0.1', 4001)], dbFile='a.sqlite', logFile='a.log'),
     connectb = partial(connect, 4001, 4001, 'user_b', knownNodes=[('127.0.0.1', 4000)], dbFile='b.sqlite', logFile='b.log'),
     connectc = partial(connect, 4002, 4002, 'user_c', knownNodes=[('127.0.0.1', 4001)], dbFile='c.sqlite', logFile='c.log'),
+    # Connect to home from planet lab 1, and vice versa.
+    connectd = partial(connect, 4000, 4000, 'user_d', knownNodes=[('142.104.21.245', 4000)], dbFile='d.sqlite', logFile='d.log'),
+    connectp = partial(connect, 4000, 4000, 'user_p', knownNodes=[('24.68.144.250', 4000)], dbFile='p.sqlite', logFile='p.log'),
+
     add_bobs_files = partial(add_files, [
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Aries' Theme.wav",
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - I. Prelude.wav",
