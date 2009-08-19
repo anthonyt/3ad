@@ -38,15 +38,22 @@ class TagAggregator(object):
 
             return save_df
 
-        dfs = []
+        # Make sure that each tag is processed in full before starting
+        # the next one. There seems to be a problem with the tuple space
+        # implementation that requires this. Sigh.
+        # TODO: Figure out this limitation; I feel like it'll get in the way
+        #       when we start growing the network.
+        df = defer.Deferred()
         for name in self.tag_names:
-            t_df = self.model.get_tag(name)
-            t_df.addCallback(handle_tag, name)
-            dfs.append(t_df)
-
-        list_df = defer.DeferredList(dfs)
-        list_df.addCallback(done)
-        return list_df
+            def get_tag(val, name):
+                logger.debug("Called get_tag method for %s", name)
+                t_df = self.model.get_tag(name)
+                t_df.addCallback(handle_tag, name)
+                return t_df
+            df.addCallback(get_tag, name)
+        df.addCallback(done)
+        df.callback(None)
+        return df
 
 class FileAggregator(object):
     def __init__(self, controller, model, tag_list, user_name=None):
@@ -249,19 +256,22 @@ class Controller(object):
                 # have been applied, depending on the presence of a tags list
                 return inner_df
 
-        dfs = []
+        # Make sure that each file is processed in full before starting
+        # the next one. There seems to be a problem with the tuple space
+        # implementation that requires this. Sigh.
+        # TODO: Figure out this limitation; I feel like it'll get in the way
+        #       when we start growing the network.
+        df = defer.Deferred()
         for file_name in file_names:
-            logger.debug("Getting audio file...")
-            df = self.model.get_audio_file(file_name=file_name, user_name=user_name)
-            df.addCallback(got_file, file_name)
-            dfs.append(df)
-
-        # All got_file calls will return a deferred. Because of this,
-        # list_df.callback() isn't called until all got_file calls are
-        # finished with their business.
-        list_df = defer.DeferredList(dfs)
-        list_df.addCallback(done)
-        return list_df
+            def get_file(val, file_name):
+                logger.debug("Getting audio file... %s", file_name)
+                f_df = self.model.get_audio_file(file_name=file_name, user_name=user_name)
+                f_df.addCallback(got_file, file_name)
+                return f_df
+            df.addCallback(get_file, file_name)
+        df.addCallback(done)
+        df.callback(None)
+        return df
 
 
     def add_file(self, file_name, user_name=None, tags=None):
