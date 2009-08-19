@@ -36,6 +36,7 @@ class KeyAggregator(object):
 
         def got_tuples(tuples):
             keys = [t[1] for t in tuples]
+            logger.debug("KeyAggregator Got Key List: %r", keys)
 
             self.key_lists.append(keys)
 
@@ -55,6 +56,7 @@ class KeyAggregator(object):
             # add these tuples to the cache!!
             self.net_handler.cache_store_tuples(dTuple, result_tuples)
             # continue execution
+            logger.debug("KeyAggregator found keys on network")
             got_tuples(result_tuples)
 
         # for each search tuple, run our got_tuples function on the resulting tuple rows
@@ -62,6 +64,7 @@ class KeyAggregator(object):
             # attempt to fetch cached results
             result_tuples = self.net_handler.cache_get_tuples(dTuple)
             if result_tuples is not None:
+                logger.debug("KeyAggregator found cached keys")
                 got_tuples(result_tuples)
             else:
                 # if there are no cached results, get new results
@@ -88,6 +91,9 @@ class ObjectAggregator(object):
         def got_value(value):
             # append this value to our list
             obj = self.net_handler.obj_from_row(value)
+            got_obj(obj)
+
+        def got_obj(obj):
             self.objects.append(obj)
 
             # if we have got all the values we asked for
@@ -100,10 +106,7 @@ class ObjectAggregator(object):
 #            logger.debug("-> Searching for key.. %r", key.encode('hex'))
             o = self.net_handler.cache_get_obj(key)
             if o is not None:
-                self.objects.append(o)
-                if len(self.objects) == len(self.key_list):
-                    # FIXME: this could well be a race condition with the similar statement above
-                    callback(self.objects)
+                got_obj(o)
             else:
                 df = self.net_handler.dht_get_value(key)
                 df.addCallback(got_value)
@@ -170,7 +173,7 @@ class NetworkHandler(object):
 
     def dht_store_value(self, key, value):
         def success(result):
-            logger.debug("-> stored value: %r", result)
+            logger.debug("dht_store_value: %s => %r on %r", key.encode('hex'), value, result)
             return result
 
         logger.debug("-> Attempting to store value %s => %r", key.encode('hex'), value)
@@ -184,14 +187,14 @@ class NetworkHandler(object):
             """
             @type result  tuple or None
             """
-            logger.debug("SUCCESS? -> %r", result)
+            logger.debug("dht_get_tuples: %r %r", result, dTuple)
             return result
 
         def error(failure):
-            logger.debug("-> an error occurred: %s", failure.getErrorMessage())
+            logger.debug("dht_get_tuples: %r, %s", dTuple, failure.getErrorMessage())
             return None
 
-#        logger.debug("-> searching for tuples based on %r", dTuple)
+        logger.debug("-> searching for tuples based on %r", dTuple)
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -220,11 +223,12 @@ class NetworkHandler(object):
 
     def dht_store_tuple(self, dTuple):
         def success(result):
-            logger.debug("-> stored tuple: %r", result)
+            logger.debug("-> dht_store_tuple: %r", dTuple)
             return result
 
         def error(failure):
-            logger.debug("-> an error occurred: %s", failure.getErrorMessage())
+            logger.debug("-> dht_store_tuple: %r %s",
+                    dTuple, failure.getErrorMessage())
             pass
 
         logger.debug("-> Attempting to store tuple: %r", dTuple)
@@ -379,6 +383,7 @@ class SaveableModel(object):
         df = defer.Deferred()
 
         def save_my_tuple(val):
+            logger.debug("save_my_tuple() called for %r", self)
             my_tuple = self._get_tuple()
             df = _network_handler.dht_store_tuple(my_tuple)
             return df
