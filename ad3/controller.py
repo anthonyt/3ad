@@ -265,73 +265,11 @@ class Controller(object):
 
 
     def add_file(self, file_name, user_name=None, tags=None):
-        # TODO: Make this just a wrapper method for add_files()
+        def done(result):
+            return result[file_name]
 
-        if tags is None:
-            tags = []
-
-        def got_file(file):
-            inner_df = defer.Deferred()
-            if file is not None:
-                # if a matching file already exists, return it through
-                # the deferred
-                inner_df.callback((file, False))
-            else:
-                # Otherwise, we'll return a deferred, which will eventually
-                # return (file, True), after creating it and adding tags.
-
-                file = AudioFile(file_name, user_name=user_name)
-
-                def save_file(vector):
-                    file.vector = vector
-                    save_df = self.model.save(file)
-                    return save_df
-
-                def lmk(vector):
-                    logger.debug("LETTING YOU KNOW THAT VECTORS HAVE BEEN CREATED")
-                    return vector
-
-                def done(val):
-                    return (file, True)
-
-                inner_df.addCallback(self.create_vectors)
-                inner_df.addCallback(lmk)
-                inner_df.addCallback(save_file)
-
-                # After the file has been saved, apply the tags to it!
-                # TODO: we shouldn't get_tags for each file individually. Do it once, before saving any files.
-                if tags:
-                    def got_tags(tags):
-                        # Make sure that each apply_tag_to_file call does not overlap
-                        # FIXME: Not sure if we need this now that the network
-                        #        is tolerant of packet loss.
-                        def apply(value, file, tag):
-                            logger.debug("Attempting to apply: %r", tag)
-                            tag_df = self.model.apply_tag_to_file(file, tag)
-                            return tag_df
-
-                        tag_df = defer.Deferred()
-                        for t in tags:
-                            tag_df.addCallback(apply, file, t)
-                        tag_df.callback(None)
-                        return tag_df
-
-                    def get_tags(val):
-                        ta = TagAggregator(self, self.model, tags, True)
-                        ta_df = ta.go()
-                        return ta_df
-
-                    inner_df.addCallback(get_tags)
-                    inner_df.addCallback(got_tags)
-
-                inner_df.addCallback(done)
-
-                # Pass "file" to our first callback (create_vectors)
-                inner_df.callback(file)
-            return inner_df
-
-        df = model.get_audio_file(file_name=file_name, user_name=user_name)
-        df.addCallback(got_file)
+        df = self.add_files([file_name], user_name, tags)
+        df.addCallback(done)
         return df
 
 
