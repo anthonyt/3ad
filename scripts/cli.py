@@ -36,7 +36,7 @@ from ad3.learning import *
 from ad3.learning.euclid import Euclidean
 from ad3.learning.gauss import Gaussian
 from ad3.learning.svm import SVM
-from ad3.controller import Controller
+from ad3.controller import Controller, TagAggregator, FileAggregator
 
 import logging
 from entangled.kademlia import logs as kademlia_logs
@@ -209,6 +209,10 @@ def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile='
     # set up the kademlia logs
     kademlia_logs.addHandler(handler)
     kademlia_logs.logger.setLevel(logging.DEBUG)
+    # set up the tuple space logs
+    dtuple_logs = logging.getLogger('dtuple')
+    dtuple_logs.addHandler(handler)
+    dtuple_logs.setLevel(logging.INFO)
     # set up the ad3 logs
     ad3_logs.addHandler(handler)
     ad3_logs.logger.setLevel(logging.DEBUG)
@@ -233,6 +237,30 @@ def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile='
 
     return controller
 
+@cont
+def clear_network_cache():
+    ad3.models.dht.dht._network_handler._cache = {}
+    return None
+
+@cont
+def print_network_cache():
+    n = p.terminalProtocol.namespace
+    cache = n['controller'].model.get_network_handler()._cache
+
+    print "\r"
+    for x in sorted(cache.keys()):
+        print "%s => %r\r\n\r" % (x.encode('hex'), cache[x])
+    return None
+
+@cont
+def print_data_store():
+    n = p.terminalProtocol.namespace
+    datastore = n['node']._dataStore
+
+    print "\r"
+    for x in sorted(datastore.keys()):
+        print "%s => %r\r\n\r" % (x.encode('hex'), datastore[x])
+    return None
 """
     need to:
         add file (path) -> file
@@ -362,6 +390,14 @@ def add_plugin(module_name, name=None):
 
     n = p.terminalProtocol.namespace
     df = n['controller'].add_plugin(name, module_name)
+    return df
+
+@sync
+@cont
+def add_tags(*args):
+    n = p.terminalProtocol.namespace
+    ta = TagAggregator(n['controller'], n['controller'].model, args, True)
+    df = ta.go()
     return df
 
 @sync
@@ -590,6 +626,10 @@ cmds = dict(
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_05 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Bourree.mp3.wav",
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_06 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Double.mp3.wav",
     ]),
+    add_tags=add_tags,
+    clear_network_cache=clear_network_cache,
+    print_network_cache=print_network_cache,
+    print_data_store=print_data_store,
     sync = sync,
     add_plugin=add_plugin,
     add_bextract=partial(add_plugin, 'ad3.analysis_plugins.bextract_plugin'),
