@@ -375,22 +375,6 @@ def find_a_bunch_of_data(offset=0, num=1000):
 
     return outer_df
 
-@sync
-@cont
-def add_plugin(module_name, name=None):
-    """
-    @param module_name: the module name of the plugin
-    @type  module_name: str or unicode
-
-    @param name: the name of this plugin
-    @type  name: str or unicode
-    """
-    if name is None:
-        name = module_name
-
-    n = p.terminalProtocol.namespace
-    df = n['controller'].add_plugin(name, module_name)
-    return df
 
 @sync
 @cont
@@ -635,8 +619,6 @@ cmds = dict(
     print_network_cache=print_network_cache,
     print_data_store=print_data_store,
     sync = sync,
-    add_plugin=add_plugin,
-    add_bextract=partial(add_plugin, 'ad3.analysis_plugins.bextract_plugin'),
     add_file=add_file,
     add_files=add_files,
     get_files=sync(get_files),

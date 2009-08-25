@@ -304,29 +304,6 @@ class Controller(object):
         return outer_df
 
 
-    def add_plugin(self, name, module_name):
-        outer_df = defer.Deferred()
-
-        def got_plugin(plugin):
-            if plugin is None:
-                # If the plugin doesn't exist, create it and return it to the callback
-                plugin = Plugin(name, module_name)
-
-                def done(val):
-                    outer_df.callback(plugin)
-
-                df = self.model.save(plugin)
-                df.addCallback(done)
-            else:
-                # If it does exist, return None to the callback.
-                outer_df.callback(None)
-
-        df = self.model.get_plugin(name=name, module_name=module_name)
-        df.addCallback(got_plugin)
-
-        return outer_df
-
-
     def find_files_by_tags(self, tag_names, user_name=None):
         def got_tags(tags):
             if len(tags) != len(tag_names):
