@@ -773,8 +773,8 @@ def generate_plugin_output(file_name, file_key, plugin):
     Immediately returns a deferred that will return the result of
     saving the PluginOutput object.
     """
-    def save_plugin_output(vector, plugin):
-        po = PluginOutput(vector, plugin.get_key(), audio_key)
+    def save_plugin_output(vector):
+        po = PluginOutput(vector, plugin.get_key(), file_key)
         s_df = save(po)
         return s_df
 
