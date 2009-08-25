@@ -29,6 +29,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         self.tcpPort = tcpPort
         self._oobListeningPort = None
         self._oobServerFactory = None
+        self.computations = {}
 
     def joinNetwork(self, knownNodeAddresses=None):
         entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
@@ -40,19 +41,61 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             listenTCP(self.tcpPort, self._oobServerFactory)
 
     def sendOffloadCommand(self, key, struct):
-        def executeRPC(nodes):
-            contact = random.choice(nodes)
-            logger.debug("SENDING RPC TO: %r", contact)
+        """ Will set up oobServerFactory to accept download requests for
+        the file described in C{struct} and issue the offload command
+        to the nearest available contact.
+
+        Will query at most protocol.k contacts, as per the method
+        C{self.iterativeFindNode}.
+
+        Immediately returns a deferred that will return either C{True} or
+        C{False} depending on whether the command was accepted by a remote
+        node.
+        """
+        contacts = []
+        outer_df = defer.Deferred()
+
+        def executeRPC():
+            contact = contacts.pop(0)
+            logger.debug("SENDING RPC TO: %r; % contacts left",
+                    contact, len(contacts))
             struct['contact'] = contact
 
-            df = contact.offload(key, struct['file_uri'])
-            return df
+            # Tell our server factory to accept this request.
+            self._oobServerFactory.add_request_key(key, struct['file_uri'])
+
+            # Ask the contact to do it.
+            rpc_df = contact.offload(key, struct['file_key'],
+                    struct['file_uri'])
+
+            rpc_df.addBoth(receiveResponse)
+
+            return rpc_df
+
+        def receiveResponse(response):
+            if len(contacts) > 0 and response != "OK":
+                # If the request wasn't accepted, but we still have more
+                # contacts to try, do so.
+                executeRPC()
+            else:
+                # If the file was downloaded, the request will have been
+                # automatically removed from the server's ACL thing. But lets
+                # make sure:
+                try: self._oobServerFactory.get_request_key(key)
+                except KeyError, e: pass
+
+                # We're done. Trigger the outer deferred.
+                outer_df.callback(response)
+
+        def gotNodes(nodes):
+            contacts.extend(nodes)
+            receiveResponse('begin')
 
         # Find k nodes closest to the key...
-        df = self.iterativeFindNode(key)
-        df.addCallback(executeRPC)
+        inner_df = self.iterativeFindNode(key)
+        inner_df.addCallback(gotNodes)
 
-        return df
+        return outer_df
 
     def pollOffloadedCalculation(self, key, struct):
         def update_struct(val):
@@ -67,14 +110,29 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         return df
 
     @rpcmethod
-    def offload(self, key, file_uri, _rpcNodeID, _rpcNodeContact, **kwargs):
-        logger.debug("-------------")
+    def offload(self, key, file_key, file_uri,
+            _rpcNodeID, _rpcNodeContact, **kwargs):
+        """ RPC method to request that this node performs a vector computation
+        for the requesting node.
 
-        logger.debug("RECEIVED AN OFFLOAD RPC! %r %r", file_uri, plugin_module)
+        If the request is accepted, this method will continue by downloading
+        the file in question from the remote node, collecting all plugins,
+        creating plugin outputs for the plugin, file_key pair, and updating
+        self.computations[key] with the resulting vector from the learning
+        module.
 
-        if not hasattr(self, 'computations'):
-            self.computations = {}
+        At each stage, self.computations[key] will be updated, so that this
+        node is able to respond to poll() requests.
+        """
+        logger.debug("Received an offload RPC - %r; %r",
+                file_uri, _rpcNodeContact)
 
+        if len(self.computations) > 0:
+            logger.debug("DECLINING offload request")
+            # If we are already processing something, decline this request
+            return "NO"
+
+        logger.debug("ACCEPTING offload request")
         self.computations[key] = {
             'complete': False,
             'vector': None,
@@ -83,6 +141,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         }
 
         def do_computation(file):
+            #FIXME: THIS METHOD needs to be rewritten. The rest of the offload() method is fine, tho.
             try:
                 # In a perfect world there would only be one thread mucking
                 # about with self.computations[key] at the same time. So
@@ -108,18 +167,21 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
                 self.computations[key]['complete'] = True
                 self.computations[key]['failed'] = True
 
-        def callback(file):
+        def downloaded_file(file):
+            logger.debug("Finished downloading %s", file_uri)
             df = threads.deferToThread(do_computation, file)
 
-        # Receive the file in the main loop, but spin processing off
-        # into its own thread.
-        logger.debug("Downloading %s", file_uri)
-        clientFactory = HTTPClientFactory(
-                callback, key, file_uri, timeout=0)
-        reactor.connectTCP(
-                _rpcNodeContact.address, self.tcpPort, clientFactory)
+        def download_file(file):
+            # Receive the file in the main loop, but spin processing off
+            # into its own thread.
+            logger.debug("Downloading %s", file_uri)
+            clientFactory = HTTPClientFactory(
+                    downloaded_file, key, file_uri, timeout=0)
+            reactor.connectTCP(
+                    _rpcNodeContact.address, self.tcpPort, clientFactory)
 
-        logger.debug("OFFLOAD FINISHED")
+        download_file()
+
         return "OK"
 
     @rpcmethod
