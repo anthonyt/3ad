@@ -349,16 +349,26 @@ class NetworkHandler(object):
 _network_handler = None
 _dht_df = defer.Deferred()
 _dht_df.callback(None)
+plugins = []
 
 def set_network_handler(obj):
     """
     set the network handler object.
     should be an instance of the network handler class above
     will be used by all functions below
+
+    Also defines the plugins that will be used by 3ad.
     """
     logger.debug("-> setting network handler! %r", obj)
-    global _network_handler
+    global _network_handler, plugins
     _network_handler = obj
+
+    # Define our plugins:
+    plugins = [
+        Plugin('charlotte', 'ad3.analysis_plugins.charlotte'),
+        Plugin('bextract', 'ad3.analysis_plugins.bextract_plugin'),
+        Plugin('centroid', 'ad3.analysis_plugins.centroid_plugin')
+    ]
 
     def do_nothing(val):
         logger.debug("Doing nothing!")
@@ -380,6 +390,11 @@ class SaveableModel(object):
         return ()
 
     def _save(self, my_hash):
+        """ Save this object to the DHT.
+
+        Immediately returns a deferred which will return
+        this object, after it has been saved.
+        """
         outer_df = defer.Deferred()
         df = defer.Deferred()
 
@@ -396,7 +411,7 @@ class SaveableModel(object):
             return df
 
         def done(val):
-            outer_df.callback(val)
+            outer_df.callback(self)
 
         if self.key is None:
             self.key = self._get_key()
@@ -545,7 +560,7 @@ class PluginOutput(ad3.models.abstract.PluginOutput, SaveableModel):
         df = defer.Deferred()
 
         def done(val):
-            outer_df.callback(val)
+            outer_df.callback(self)
 
         def save_audio_tuple(val):
             # make an audio_file row for cross referencing
@@ -644,12 +659,6 @@ def get_plugin_output(audio_file, plugin):
     df = _network_handler.get_objects_matching_tuples(search_tuples)
     return df
 
-# Define our plugins:
-plugins = [
-    Plugin('charlotte', 'ad3.analysis_plugins.charlotte'),
-    Plugin('bextract', 'ad3.analysis_plugins.bextract_plugin'),
-    Plugin('centroid', 'ad3.analysis_plugins.centroid_plugin')
-]
 def get_plugins(name = None, module_name = None, plugin_output = None):
     """ Returns a deferred, which will be called back with a list of Plugin objects.
     By default returns all plugins.
@@ -668,7 +677,7 @@ def get_plugins(name = None, module_name = None, plugin_output = None):
     ps = copy.copy(plugins)
 
     if module_name:
-        ps = [p for p in ps if p.module_name = moduel_name]
+        ps = [p for p in ps if p.module_name == module_name]
 
     if plugin_output:
         ps = [p for p in ps if p.key == plugin_output.plugin_key]
@@ -765,10 +774,25 @@ def save(obj):
     df = obj.save()
     return df
 
-def generate_plugin_output(audio_file, plugin):
-    pass
+def generate_plugin_output(file_name, file_key, plugin):
+    """ Generates and saves a PluginOutput object for the file/plugin
+    pair.
 
-def generate_plugin_outputs(audio_file):
+    Immediately returns a deferred that will return the result of
+    saving the PluginOutput object.
+    """
+    def save_plugin_output(vector, plugin):
+        po = PluginOutput(vector, plugin.get_key(), audio_key)
+        s_df = save(po)
+        return s_df
+
+    # Make blocking function "plugin.create_vector" nonblocking
+    # by deferring it to its own thread!
+    df = threads.deferToThread(plugin.create_vector, file_name)
+    df.addCallback(save_plugin_output)
+    return df
+
+def generate_plugin_outputs(file_name, file_key):
     outer_df = defer.Deferred()
     results = []
 
@@ -779,15 +803,15 @@ def generate_plugin_outputs(audio_file):
         results.append(val)
         return None
 
-    def gpo(val, f, p):
-        df = generate_plugin_output(f, p)
+    def gpo(val, p):
+        df = generate_plugin_output(file_name, file_key, p)
         return df
 
     def got_plugins(plugins):
         inner_df = defer.Deferred()
         for plugin in plugins:
-            logger.debug("-> Creating vector for %r %r", file, plugin)
-            inner_df.addCallback(gpo, audio_file, plugin)
+            logger.debug("-> Creating vector for %r %r", file_name, plugin)
+            inner_df.addCallback(gpo, plugin)
             inner_df.addCallback(keep_result)
 
         inner_df.addCallback(done)
