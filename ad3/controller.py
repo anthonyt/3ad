@@ -127,16 +127,17 @@ class Controller(object):
         return df
 
 
-    def create_vectors(self, file, plugin_name=None):
+    def create_vectors(self, file):
         def update_file_vector(val):
-            # this deferred will pass the calculated vector onto the next callback
+            # Take all the new PluginOutput objects and generate and
+            # apply a single vector to represent the file.
             df = self.mine.calculate_file_vector(file)
             return df
 
+        # Generate a bunch of PluginOutput objects.
         df = self.model.update_vector(file)
         df.addCallback(update_file_vector)
         return df
-
 
 
     def guess_tags(self, audio_file=None, user_name=None):
