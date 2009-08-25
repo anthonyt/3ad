@@ -141,37 +141,35 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         }
 
         def do_computation(file):
-            #FIXME: THIS METHOD needs to be rewritten. The rest of the offload() method is fine, tho.
+            logger.debug("Computing vector for %s", file_uri)
             try:
-                # In a perfect world there would only be one thread mucking
-                # about with self.computations[key] at the same time. So
-                # hopefully we don't have to use mutexes.
-                self.computations[key]['downloaded'] = True
-
-                logger.debug("Computing vector for %s", file_name)
-
                 # Here's the real work: creating the vector.
+                # FIXME: This needs to be replaced by a more general
+                #        "compute the vectors for this file" method.
                 vector = plugin.create_vector(file.name)
-
-                if len(vector) == 0 or\
-                        len([a for a in vector if a == 0]) == len(vector):
-                    # Zero length vector or zeroed out vector is an indication
-                    # that Marsyas choked.
-                    self.computations[key]['failed'] = True
-
-                self.computations[key]['complete'] = True
                 self.computations[key]['vector'] = vector
             except Exception:
-                logger.debug("Computation error :( %s",
-                        failure.getErrorMessage())
-                self.computations[key]['complete'] = True
+                logger.debug("Computation error :( %s")
                 self.computations[key]['failed'] = True
+
+            # FIXME: The following checks should be handled by the
+            #        "compute the vectors for this file" method, above.
+            if len(vector) == 0 or\
+                    len([a for a in vector if a == 0]) == len(vector):
+                # Zero length vector or zeroed out vector is an indication
+                # that Marsyas choked.
+                self.computations[key]['failed'] = True
+
+            self.computations[key]['complete'] = True
 
         def downloaded_file(file):
             logger.debug("Finished downloading %s", file_uri)
+            self.computations[key]['downloaded'] = True
+
+            # Pass the downloaded file object to the do_computation method
             df = threads.deferToThread(do_computation, file)
 
-        def download_file(file):
+        def download_file():
             # Receive the file in the main loop, but spin processing off
             # into its own thread.
             logger.debug("Downloading %s", file_uri)
