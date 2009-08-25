@@ -5,6 +5,7 @@ import urllib
 import tempfile
 import random
 import os
+import copy
 import entangled
 import entangled.dtuple
 import entangled.kademlia.contact
@@ -423,7 +424,10 @@ class Plugin(ad3.models.abstract.Plugin, SaveableModel):
 
     def __init__(self, name, module_name, key = None):
         ad3.models.abstract.Plugin.__init__(self, name, module_name)
-        self.key = key
+        if key:
+            self.key = key
+        else:
+            self.key = self._get_key()
 
     def _get_key(self):
         r = _network_handler.hash_function("plugin_" + self.name + self.module_name)
@@ -433,14 +437,14 @@ class Plugin(ad3.models.abstract.Plugin, SaveableModel):
         my_tuple = ("plugin", self.key, self.name, self.module_name)
         return my_tuple
 
-    def save(self):
-        my_hash = {
-            'name': self.name,
-            'module_name': self.module_name,
-            'type': 'plugin'
-        }
-        df = self._save(my_hash)
-        return df
+#    def save(self):
+#        my_hash = {
+#            'name': self.name,
+#            'module_name': self.module_name,
+#            'type': 'plugin'
+#        }
+#        df = self._save(my_hash)
+#        return df
 
 class AudioFile(ad3.models.abstract.AudioFile, SaveableModel):
     """
@@ -640,6 +644,12 @@ def get_plugin_output(audio_file, plugin):
     df = _network_handler.get_objects_matching_tuples(search_tuples)
     return df
 
+# Define our plugins:
+plugins = [
+    Plugin('charlotte', 'ad3.analysis_plugins.charlotte'),
+    Plugin('bextract', 'ad3.analysis_plugins.bextract_plugin'),
+    Plugin('centroid', 'ad3.analysis_plugins.centroid_plugin')
+]
 def get_plugins(name = None, module_name = None, plugin_output = None):
     """ Returns a deferred, which will be called back with a list of Plugin objects.
     By default returns all plugins.
@@ -653,10 +663,18 @@ def get_plugins(name = None, module_name = None, plugin_output = None):
     @param plugin_output: if provided, returns only the plugin associated with this object
     @type  plugin_output: PluginOutput object
     """
-    search_tuples = [ ("plugin", None, name, module_name) ]
-    if plugin_output is not None:
-        search_tuples.append( ("plugin", None, "plugin_output", plugin_output.get_key()) )
-    df = _network_handler.get_objects_matching_tuples(search_tuples)
+    # Note that we hardcode the Plugins now in 3ad, so this will look in our
+    # predefined list.
+    ps = copy.copy(plugins)
+
+    if module_name:
+        ps = [p for p in ps if p.module_name = moduel_name]
+
+    if plugin_output:
+        ps = [p for p in ps if p.key == plugin_output.plugin_key]
+
+    df = defer.Deferred()
+    df.callback(ps)
     return df
 
 def get_plugin(name = None, module_name = None, plugin_output = None):
