@@ -184,18 +184,26 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
 
     @rpcmethod
     def poll(self, key, file_uri, _rpcNodeID, _rpcNodeContact, **kwargs):
-        if not hasattr(self, 'computations') or not self.computations.has_key(key):
-            # we've never heard of the requested offload operation. make something up!
-            logger.debug("Returning BS poll")
+        logger.debug("Returning poll")
+
+        if not self.computations.has_key(key):
+            # we've never heard of the requested offload operation.
+            # make something up!
+            logger.debug("Poll status: Never heard of that file")
             result = {'complete': True, 'vector': None, 'failed': True, 'downloaded': False}
-        elif self.computations[key]['complete']:
-            # we've finished the requested offload operation. remove if from the list and return it
-            logger.debug("Returning finished poll")
-            result = self.computations.pop(key)
         else:
-            # we haven't finished the requested offload operation, but we have some data on it
-            logger.debug("Returning unfinished poll")
             result = self.computations[key]
 
-        return simplejson.dumps(result)
+            if self.computations[key]['complete']:
+                # we've finished the requested offload operation.
+                # remove if from the list and return it
+                # FIXME: Deleting this here could be dangerous; if the message
+                #        gets lost on the network, the requesting node won't be
+                #        able to re-request the results.
+                logger.debug("Poll status: Complete")
+                del self.computations[key]
+            else:
+                logger.debug("Poll status: In Progress")
+
+        return result
 
