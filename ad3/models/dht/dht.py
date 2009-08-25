@@ -347,8 +347,6 @@ class NetworkHandler(object):
         self._cache[key] = (lifetime, result_tuples)
 
 _network_handler = None
-_dht_df = defer.Deferred()
-_dht_df.callback(None)
 plugins = []
 
 def set_network_handler(obj):
@@ -369,12 +367,6 @@ def set_network_handler(obj):
         Plugin('bextract', 'ad3.analysis_plugins.bextract_plugin'),
         Plugin('centroid', 'ad3.analysis_plugins.centroid_plugin')
     ]
-
-    def do_nothing(val):
-        logger.debug("Doing nothing!")
-        return val
-
-    _dht_df.addCallback(do_nothing)
 
 def get_network_handler():
     return _network_handler
