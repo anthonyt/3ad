@@ -3,6 +3,7 @@ import os
 from numpy import array, concatenate, divide, mean
 from ad3.models.dht import AudioFile, Plugin, PluginOutput, Tag
 from twisted.internet import defer
+from twisted.internet import threads
 from functools import partial
 from sets import Set
 
@@ -138,12 +139,12 @@ class Controller(object):
         def get_file_vector(val):
             # Take all the new PluginOutput objects and generate and
             # apply a single vector to represent the file.
-            df = self.mine.calculate_file_vector(file)
+            df = self.mine.calculate_file_vector(audio_file)
             return df
 
         def save_file(vector):
-            logger.debug("--> Applying vector to %r %r", file_name, vector)
-            logger.debug("--> Saving %r", file_name)
+            logger.debug("--> Applying vector to %r %r", audio_file, vector)
+            logger.debug("--> Saving %r", audio_file)
             audio_file.vector = vector
             df_s = self.model.save(audio_file)
             return df_s
@@ -151,7 +152,7 @@ class Controller(object):
         def got_vectors(result):
             # Create new PluginOutput objects and store them on the network
             if result is None:
-                df_p = self.generate_plugin_outputs(file)
+                df_p = self.generate_plugin_outputs(audio_file)
             else:
                 df_p = self.generate_plugin_outputs_from_dict(result)
 
@@ -359,7 +360,7 @@ class Controller(object):
         Immediately returns a deferred which will return a dict of vectors
         """
         df = threads.deferToThread(
-                blocking_generate_vectors,
+                self.blocking_generate_vectors,
                 plugins, file_name, file_key
              )
         return df
@@ -415,7 +416,7 @@ class Controller(object):
 
         df = self.generate_all_plugin_vectors(
                 audio_file.file_name, audio_file.get_key())
-        df.addCallback(generate_plugin_outputs_from_dict, outputs)
+        df.addCallback(self.generate_plugin_outputs_from_dict, outputs)
         df.addCallback(done)
 
         return outer_df
