@@ -127,39 +127,41 @@ class Controller(object):
         return df
 
 
-    def create_vectors(self, file):
-        """ Create new PluginOutput objects for the provided audio file,
-        and calculate a new file vector.
-
-        Immediately returns a deferred that will return the new vector.
-
-        Does not modify the file object.
-        """
-        def update_file_vector(plugin_outputs):
-            # Take all the new PluginOutput objects and generate and
-            # apply a single vector to represent the file.
-            df = self.mine.calculate_file_vector(file)
-            return df
-
-        # Generate a bunch of PluginOutput objects.
-        df = self.generate_plugin_outputs(file)
-        df.addCallback(update_file_vector)
-        return df
-
-
     def update_file_vectors(self, audio_file):
         """ Create new PluginOutputs and generate a new vector
         for the provided audio file. Save the updated file object.
 
         Immediately returns a deferred that will return the file object.
         """
-        def save_vector(vector):
+        outer_df = defer.Deferred()
+
+        def get_file_vector(val):
+            # Take all the new PluginOutput objects and generate and
+            # apply a single vector to represent the file.
+            df = self.mine.calculate_file_vector(file)
+            return df
+
+        def save_file(vector):
+            logger.debug("--> Applying vector to %r %r", file_name, vector)
+            logger.debug("--> Saving %r", file_name)
             audio_file.vector = vector
             df_s = self.model.save(audio_file)
             return df_s
 
-        df = self.create_vectors(audio_file)
-        df.addCallback(save_vector)
+        def got_vectors(result):
+            # Create new PluginOutput objects and store them on the network
+            if result is None:
+                df_p = self.generate_plugin_outputs(file)
+            else:
+                df_p = self.generate_plugin_outputs_from_dict(result)
+
+            return df_p
+
+        df = self.model.special_generate_plugin_vectors(audio_file)
+        df.addCallback(got_vectors)
+        df.addCallback(get_file_vector)
+        df.addCallback(save_file)
+
         return df
 
 
@@ -225,19 +227,9 @@ class Controller(object):
                 file = AudioFile(file_name, user_name=user_name)
                 result_tuples[file_name] = (file, True)
 
-                def save_file(val):
-                    logger.debug("--> Saving %r", file_name)
-                    save_df = self.model.save(file)
-                    return save_df
-
-                def apply_vector(vector):
-                    logger.debug("--> Applying vector to %r %r", file_name, vector)
-                    file.vector = vector
-                    return None
-
-                inner_df.addCallback(self.create_vectors) # passes the vector to the next callback
-                inner_df.addCallback(apply_vector)
-                inner_df.addCallback(save_file)
+                # Take care of saving the file object, as well as creating
+                # the file.vector and PluginOutput objects, all at once!
+                inner_df.addCallback(self.update_file_vectors)
 
                 # After the file has been saved, apply the tags to it!
                 # TODO: we shouldn't get_tags for each file individually. Do it once, before saving any files.
@@ -382,13 +374,19 @@ class Controller(object):
         df.addCallback(self.generate_plugin_vectors, file_name, file_key)
         return df
 
-    def generate_plugin_outputs_from_dict(self, results):
+    def generate_plugin_outputs_from_dict(self, results, outputs=None):
         """ Take the result of self.generate_plugin_vectors and generate &
         save the appropriate PluginOutput objects.
 
         Immediately returns a deferred that will return when all PluginOutput
         objects have been saved.
+
+        Optional paramater outputs is a list. This method will append the
+        created PluginOutput objects to the list, if supplied.
         """
+        if outputs is None:
+            outputs = []
+
         dfs = []
         for key in results:
             vector = results[key]
@@ -417,7 +415,7 @@ class Controller(object):
 
         df = self.generate_all_plugin_vectors(
                 audio_file.file_name, audio_file.get_key())
-        df.addCallback(generate_plugin_outputs_from_dict)
+        df.addCallback(generate_plugin_outputs_from_dict, outputs)
         df.addCallback(done)
 
         return outer_df
