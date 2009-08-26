@@ -784,34 +784,58 @@ def generate_plugin_output(file_name, file_key, plugin):
     df.addCallback(save_plugin_output)
     return df
 
-def generate_plugin_outputs(file_name, file_key):
+def blocking_generate_vectors(file_name, file_key, plugins):
+    """ Blocking function. Generates a dict of vectors for each
+    file_key/plugin pair.
+    """
     outer_df = defer.Deferred()
-    results = []
+    results = {}
+
+    for plugin in plugins:
+        results[(file_key, plugin.get_key())] = plugin.create_vector(file_name)
+
+    return results
+
+def generate_plugin_outputs(file_name, file_key):
+    """ Generates and saves a PluginOutput object for the provided file
+    and every Plugin object in the system.
+
+    Immediately returns a deferred that will return a list of generated
+    PluginOutput objects
+    """
+    outer_df = defer.Deferred()
+    outputs = []
 
     def done(v):
-        outer_df.callback(results)
+        outer_df.callback(outputs)
 
-    def keep_result(val):
-        results.append(val)
-        return None
+    def save_plugin_outputs(results):
+        dfs = []
+        for key in results:
+            vector = results[key]
+            file_key, plugin_key = key
+            po = PluginOutput(vector, plugin_key, file_key)
+            df = save(po)
 
-    def gpo(val, p):
-        df = generate_plugin_output(file_name, file_key, p)
-        return df
+            outputs.append(po)
+            dfs.append(df)
+
+        list_df = defer.DeferredList(dfs)
+        return list_df
 
     def got_plugins(plugins):
-        inner_df = defer.Deferred()
-        for plugin in plugins:
-            logger.debug("-> Creating vector for %r %r", file_name, plugin)
-            inner_df.addCallback(gpo, plugin)
-            inner_df.addCallback(keep_result)
-
-        inner_df.addCallback(done)
-        inner_df.callback(None)
-        return inner_df
+        # Generate the vectors in a thread.
+        # Immediately return a deferred which will return a dict of vectors
+        df = threads.deferToThread(
+                blocking_generate_vectors,
+                file_name, file_key, plugins
+             )
+        return df
 
     df = get_plugins()
     df.addCallback(got_plugins)
+    df.addCallback(save_plugin_outputs)
+    df.addCallback(done)
 
     return outer_df
 
