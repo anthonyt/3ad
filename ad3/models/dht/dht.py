@@ -16,7 +16,6 @@ from time import time
 from sets import Set
 from twisted.internet import defer
 from twisted.internet import reactor
-from twisted.internet import threads
 from functools import partial
 
 import logging
@@ -811,7 +810,8 @@ def special_generate_plugin_vectors(audio_file):
             # schedule another poll
             logger.debug("Poll: unfinished. Sheduling another poll.")
             schedule_poll()
-        return val
+
+        return None
 
     def send_poll():
         if int(time()) - struct['timestamp'] > offload_result_timeout:
@@ -822,7 +822,7 @@ def special_generate_plugin_vectors(audio_file):
             logger.debug("Polling...")
             # execute a poll and call the "got_poll_response" method when it's done
             df = _network_handler.node.pollOffloadedCalculation(struct)
-            df.addBoth(got_poll_response)
+            df.addCallback(got_poll_response)
 
     def got_response(response):
         if response == "OK":
