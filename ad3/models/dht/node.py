@@ -1,5 +1,4 @@
 # system
-import simplejson
 import random
 from functools import partial
 # entangled
@@ -40,7 +39,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         self._oobListeningPort = \
             listenTCP(self.tcpPort, self._oobServerFactory)
 
-    def sendOffloadCommand(self, key, struct):
+    def sendOffloadCommand(self, struct):
         """ Will set up oobServerFactory to accept download requests for
         the file described in C{struct} and issue the offload command
         to the nearest available contact.
@@ -62,11 +61,12 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             struct['contact'] = contact
 
             # Tell our server factory to accept this request.
-            self._oobServerFactory.add_request_key(key, struct['file_uri'])
+            self._oobServerFactory.add_request_key(
+                    struct['file_key'], struct['file_uri'])
 
             # Ask the contact to do it.
-            rpc_df = contact.offload(key, struct['file_key'],
-                    struct['file_uri'])
+            rpc_df = contact.offload(
+                    struct['file_key'], struct['file_uri'])
 
             rpc_df.addBoth(receiveResponse)
 
@@ -81,7 +81,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
                 # If the file was downloaded, the request will have been
                 # automatically removed from the server's ACL thing. But lets
                 # make sure:
-                try: self._oobServerFactory.get_request_key(key)
+                try: self._oobServerFactory.get_request_key(struct['file_key'])
                 except KeyError, e: pass
 
                 # We're done. Trigger the outer deferred.
@@ -92,25 +92,17 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             receiveResponse('begin')
 
         # Find k nodes closest to the key...
-        inner_df = self.iterativeFindNode(key)
+        inner_df = self.iterativeFindNode(struct['file_key'])
         inner_df.addCallback(gotNodes)
 
         return outer_df
 
-    def pollOffloadedCalculation(self, key, struct):
-        def update_struct(val):
-            response = simplejson.loads(val)
-            struct['complete'] = response['complete']
-            struct['failed'] = response['failed']
-            struct['vector'] = response['vector']
-
-        df = struct['contact'].poll(key, struct['file_uri'])
-        df.addCallback(update_struct)
-
+    def pollOffloadedCalculation(self, struct):
+        df = struct['contact'].poll(struct['file_key'])
         return df
 
     @rpcmethod
-    def offload(self, key, file_key, file_uri,
+    def offload(self, file_key, file_uri,
             _rpcNodeID, _rpcNodeContact, **kwargs):
         """ RPC method to request that this node performs a vector computation
         for the requesting node.
@@ -118,10 +110,10 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         If the request is accepted, this method will continue by downloading
         the file in question from the remote node, collecting all plugins,
         creating plugin outputs for the plugin, file_key pair, and updating
-        self.computations[key] with the resulting vector from the learning
+        self.computations[file_key] with the resulting vector from the learning
         module.
 
-        At each stage, self.computations[key] will be updated, so that this
+        At each stage, self.computations[file_key] will be updated, so that this
         node is able to respond to poll() requests.
         """
         logger.debug("Received an offload RPC - %r; %r",
@@ -133,48 +125,54 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             return "NO"
 
         logger.debug("ACCEPTING offload request")
-        self.computations[key] = {
+        self.computations[file_key] = {
             'complete': False,
-            'vector': None,
+            'vectors': None,
             'failed': False,
             'downloaded': False
         }
 
-        def do_computation(file):
-            logger.debug("Computing vector for %s", file_uri)
-            try:
-                # Here's the real work: creating the vector.
-                # FIXME: This needs to be replaced by a more general
-                #        "compute the vectors for this file" method.
-                vector = plugin.create_vector(file.name)
-                self.computations[key]['vector'] = vector
-            except Exception:
-                logger.debug("Computation error :( %s")
-                self.computations[key]['failed'] = True
+        def got_vectors(results):
+            # Everything looks good, so far. Results is a dict of vectors.
+            logger.debug("Computed vectors for %s", file_uri)
 
-            # FIXME: The following checks should be handled by the
-            #        "compute the vectors for this file" method, above.
-            if len(vector) == 0 or\
-                    len([a for a in vector if a == 0]) == len(vector):
-                # Zero length vector or zeroed out vector is an indication
-                # that Marsyas choked.
-                self.computations[key]['failed'] = True
+            # Check for any obvious errors from Marsyas:
+            for t in results:
+                vector = results[t]
+                # FIXME: The following checks should be handled by the
+                #        "compute the vectors for this file" method, above.
+                if len(vector) == 0 or\
+                        len([a for a in vector if a == 0]) == len(vector):
+                    # Zero length vector or zeroed out vector is an indication
+                    # that Marsyas choked.
+                    self.computations[file_key]['failed'] = True
 
-            self.computations[key]['complete'] = True
+            self.computations[file_key]['vectors'] = results
+            self.computations[file_key]['complete'] = True
 
-        def downloaded_file(file):
+        def failure(err):
+            # Crap. Something threw an exception inside
+            # self.generate_all_plugin_vectors
+            logger.debug("Computation error :( %s")
+            self.computations[file_key]['failed'] = True
+            self.computations[file_key]['complete'] = True
+
+        def downloaded_file(tmp_file):
             logger.debug("Finished downloading %s", file_uri)
-            self.computations[key]['downloaded'] = True
 
-            # Pass the downloaded file object to the do_computation method
-            df = threads.deferToThread(do_computation, file)
+            self.computations[file_key]['downloaded'] = True
+            # Set up a deferred that will return a dict of plugin vectors
+            df = self.generate_all_plugin_vectors(tmp_file.name, file_key)
+            # Set up our success and failure methods
+            df.addCallback(got_vectors)
+            df.addErrback(failure)
 
         def download_file():
             # Receive the file in the main loop, but spin processing off
             # into its own thread.
             logger.debug("Downloading %s", file_uri)
             clientFactory = HTTPClientFactory(
-                    downloaded_file, key, file_uri, timeout=0)
+                    downloaded_file, file_key, file_uri, timeout=0)
             reactor.connectTCP(
                     _rpcNodeContact.address, self.tcpPort, clientFactory)
 
@@ -183,25 +181,25 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         return "OK"
 
     @rpcmethod
-    def poll(self, key, file_uri, _rpcNodeID, _rpcNodeContact, **kwargs):
+    def poll(self, file_key, _rpcNodeID, _rpcNodeContact, **kwargs):
         logger.debug("Returning poll")
 
-        if not self.computations.has_key(key):
+        if not self.computations.has_key(file_key):
             # we've never heard of the requested offload operation.
             # make something up!
             logger.debug("Poll status: Never heard of that file")
-            result = {'complete': True, 'vector': None, 'failed': True, 'downloaded': False}
+            result = {'complete': True, 'vectors': None, 'failed': True, 'downloaded': False}
         else:
-            result = self.computations[key]
+            result = self.computations[file_key]
 
-            if self.computations[key]['complete']:
+            if self.computations[file_key]['complete']:
                 # we've finished the requested offload operation.
                 # remove if from the list and return it
                 # FIXME: Deleting this here could be dangerous; if the message
                 #        gets lost on the network, the requesting node won't be
                 #        able to re-request the results.
                 logger.debug("Poll status: Complete")
-                del self.computations[key]
+                del self.computations[file_key]
             else:
                 logger.debug("Poll status: In Progress")
 
