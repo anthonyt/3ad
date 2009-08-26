@@ -30,5 +30,5 @@ def createVector(filename):
 
     average = mean(array(vectors)) * 100
 
-    return [average]
+    return [float(average)]
 

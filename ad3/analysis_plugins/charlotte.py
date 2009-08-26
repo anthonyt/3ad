@@ -93,7 +93,7 @@ def createVector(filename):
     # convert from useless marsyas vector to numpy array to normal python list
     result = array(result) * 100;
 
-    return result.tolist()
+    return [float(x) for x in result]
 
 
     """

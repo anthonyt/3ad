@@ -29,5 +29,5 @@ def createVector(filename):
     result = fnet.getControl("mrs_realvec/processedData").to_realvec()
 
     # use numpy to generate a list from the realvec
-    return array(result).tolist()
+    return [float(x) for x in array(result)]
 
