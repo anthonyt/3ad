@@ -128,15 +128,38 @@ class Controller(object):
 
 
     def create_vectors(self, file):
-        def update_file_vector(val):
+        """ Create new PluginOutput objects for the provided audio file,
+        and calculate a new file vector.
+
+        Immediately returns a deferred that will return the new vector.
+
+        Does not modify the file object.
+        """
+        def update_file_vector(plugin_outputs):
             # Take all the new PluginOutput objects and generate and
             # apply a single vector to represent the file.
             df = self.mine.calculate_file_vector(file)
             return df
 
         # Generate a bunch of PluginOutput objects.
-        df = self.model.update_vector(file)
+        df = self.generate_plugin_outputs(file)
         df.addCallback(update_file_vector)
+        return df
+
+
+    def update_file_vectors(self, audio_file):
+        """ Create new PluginOutputs and generate a new vector
+        for the provided audio file. Save the updated file object.
+
+        Immediately returns a deferred that will return the file object.
+        """
+        def save_vector(vector):
+            audio_file.vector = vector
+            df_s = self.model.save(audio_file)
+            return df_s
+
+        df = self.create_vectors(audio_file)
+        df.addCallback(save_vector)
         return df
 
 
