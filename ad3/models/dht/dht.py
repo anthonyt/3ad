@@ -780,7 +780,7 @@ def special_generate_plugin_vectors(audio_file):
     # sendOffloadCommand() method updates the value of this dict.
     struct = {
         'contact': None,
-        'file_uri': audio_file.file_name,
+        'file_uri': urllib.quote(audio_file.file_name),
         'file_name': audio_file.file_name,
         'file_key': audio_file.get_key(),
         'timestamp': int(time())
