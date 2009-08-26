@@ -9,7 +9,6 @@ from entangled.kademlia.node import rpcmethod
 from twisted.internet.reactor import listenTCP
 from twisted.internet import defer
 from twisted.internet import reactor
-from twisted.internet import threads
 # 3ad
 import protocol
 import logging
@@ -56,7 +55,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
 
         def executeRPC():
             contact = contacts.pop(0)
-            logger.debug("SENDING RPC TO: %r; % contacts left",
+            logger.debug("SENDING RPC TO: %r; %d contacts left",
                     contact, len(contacts))
             struct['contact'] = contact
 
@@ -81,8 +80,9 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
                 # If the file was downloaded, the request will have been
                 # automatically removed from the server's ACL thing. But lets
                 # make sure:
-                try: self._oobServerFactory.get_request_key(struct['file_key'])
-                except KeyError, e: pass
+                if response != "OK":
+                    try: self._oobServerFactory.get_request_key(struct['file_key'])
+                    except KeyError, e: pass
 
                 # We're done. Trigger the outer deferred.
                 outer_df.callback(response)
@@ -170,11 +170,14 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         def download_file():
             # Receive the file in the main loop, but spin processing off
             # into its own thread.
-            logger.debug("Downloading %s", file_uri)
-            clientFactory = HTTPClientFactory(
+            logger.debug("Downloading http://%s:%d%s",
+                    _rpcNodeContact.address,
+                    _rpcNodeContact.port,
+                    file_uri)
+            clientFactory = protocol.HTTPClientFactory(
                     downloaded_file, file_key, file_uri, timeout=0)
-            reactor.connectTCP(
-                    _rpcNodeContact.address, self.tcpPort, clientFactory)
+            reactor.connectTCP(_rpcNodeContact.address,
+                    _rpcNodeContact.port, clientFactory)
 
         download_file()
 
