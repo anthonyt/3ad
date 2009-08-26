@@ -168,9 +168,9 @@ class HTTPClient(twh.HTTPClient):
         # SUCCESS. Response finished.
         if self.receivingFile and self.__buffer is not None:
             # Send the self.__buffer file to marsyas for analysis!
-            self.__buffer.seek(0)
-            self.factory.callback(self.__buffer)
+            self.__buffer.close()
             self.__buffer = None
+            self.factory.callback(self.__buffer_name)
 
     def lineReceived(self, line):
         if not self.firstLine and not line:
@@ -178,7 +178,11 @@ class HTTPClient(twh.HTTPClient):
             # this will be the end of our headers.
             # Time to start reading data!
             # First, lets override default stringIO() buffer with a file:
-            self.__buffer = tempfile.NamedTemporaryFile()
+
+            # NB: marsyas determines file type based only on file extension
+            suffix = os.path.splitext(self.factory.path)[1]
+            fd, fname = tempfile.mkstemp(suffix=suffix)
+            self.__buffer, self.__buffer_name = (os.fdopen(fd, "w+b"), fname)
             self.handleEndHeaders()
             self.setRawMode()
         else:

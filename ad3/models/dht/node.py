@@ -1,4 +1,5 @@
 # system
+import os
 import random
 from functools import partial
 # entangled
@@ -157,15 +158,21 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             self.computations[file_key]['failed'] = True
             self.computations[file_key]['complete'] = True
 
-        def downloaded_file(tmp_file):
-            logger.debug("Finished downloading %s", file_uri)
+        def remove_file(val, tmp_file_name):
+            # After vectors are calculated (or not) clean up the temp file.
+            os.remove(tmp_file_name)
+            return val
+
+        def downloaded_file(tmp_file_name):
+            logger.debug("Finished downloading %s as %r", file_uri, tmp_file_name)
 
             self.computations[file_key]['downloaded'] = True
             # Set up a deferred that will return a dict of plugin vectors
-            df = self.generate_all_plugin_vectors(tmp_file.name, file_key)
+            df = self.generate_all_plugin_vectors(tmp_file_name, file_key)
             # Set up our success and failure methods
             df.addCallback(got_vectors)
             df.addErrback(failure)
+            df.addBoth(remove_file, tmp_file_name)
 
         def download_file():
             # Receive the file in the main loop, but spin processing off
