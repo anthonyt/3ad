@@ -766,112 +766,82 @@ def save(obj):
     df = obj.save()
     return df
 
+def special_generate_plugin_vectors(audio_file):
+    """ Attempts to farm out vector calculation over the network.
 
-def update_vector(audio_file):
-    """ Create or Replace the current PluginOutput objects for the
-    provided audio file.
+    Immediately returns a deferred that will either return a vector dict
+    or None, depending on the success or failure of the offloading operation.
 
     @param audio_file: the audio file to run the plugins on
     @type  audio_file: AudioFile
     """
     logger.debug("------\n -> Beginning update vector")
 
-    audio_key = audio_file.get_key()
-
-    # list to store the contact we offloaded to
-    # sendOffloadCommand() method updates its value
+    # Mutable object to store the contact we offloaded to, and status info.
+    # sendOffloadCommand() method updates the value of this dict.
     struct = {
         'contact': None,
-        'module_name': plugin.module_name,
         'file_uri': audio_file.file_name,
-        'file_key': audio_key,
-        'downloaded': False,
-        'complete': False,
-        'failed': False,
-        'vector': None,
+        'file_name': audio_file.file_name,
+        'file_key': audio_file.get_key(),
         'timestamp': int(time())
     }
 
-    df_chain = defer.Deferred()
     outer_df = defer.Deferred()
-    poll_cb = None
 
-
-    def done(val):
-        logger.debug("Plugin Output Created and Saved. Calling back now. %r", val)
+    def fail():
         outer_df.callback(None)
 
-    def save_plugin_output(vector, plugin):
-        po = PluginOutput(vector, plugin.get_key(), audio_key)
-        df = save(po)
-        df.addCallback(done)
-        return df
+    def succeed(vectors):
+        outer_df.callback(vectors)
 
-    def calculate_vector_yourself(val):
-        logger.debug("Calculating the damned vector myself")
-        # Make blocking function "plugin.create_vector" nonblocking
-        # by deferring it to its own thread!
-        fname = str(audio_file.file_name)
-        df = threads.deferToThread(plugin.create_vector, fname)
-        df.addCallback(save_plugin_output)
-        return df
+    def got_poll_response(response):
+        # response dict will be a copy of the entry in the contact's
+        # node.computations dict. As such, it will have the following fields:
+        # 'complete', 'vectors', 'failed', 'downloaded'
+        #  bool        dict       bool      bool
 
-    def error(failure):
-        logger.debug("Error getting vector from contact. MSG: %s",
-                failure.getErrorMessage())
-        df = calculate_vector_yourself(None)
-        return df
-
-    def polled(val):
-        if struct['failed']:
-            logger.debug("Poll failed")
-            df = calculate_vector_yourself(None)
-        elif struct['complete'] and not struct['failed']:
-            logger.debug("Poll complete!")
-            df = save_plugin_output(struct['vector'])
+        if response['failed']:
+            logger.debug("Poll: failed")
+            fail()
+        elif response['complete']:
+            logger.debug("Poll: complete!")
+            succeed(response['vectors'])
         else:
-            logger.debug("Poll unfinished. sheduling another one")
             # schedule another poll
-            df_chain.addCallback(poll_cb)
+            logger.debug("Poll: unfinished. Sheduling another poll.")
+            schedule_poll()
         return val
 
-    def poll(val):
-        if struct['complete']:
-            # we're through!
-            logger.debug("transaction complete!")
-            return None
-        elif int(time()) - struct['timestamp'] > offload_result_timeout:
+    def send_poll():
+        if int(time()) - struct['timestamp'] > offload_result_timeout:
             # timed out. just calculate it yourself
-            logger.debug("Transaction timed out. do it yourself.")
-            df = calculate_vector_yourself(None)
+            logger.debug("Offloaded transaction timed out. Computing locally.")
+            fail()
         else:
-            logger.debug("POLLING")
-            # execute a poll and call the "polled" method when it's done
-            df = _network_handler.node.pollOffloadedCalculation(audio_key, struct)
-            df.addBoth(polled)
+            logger.debug("Polling...")
+            # execute a poll and call the "got_poll_response" method when it's done
+            df = _network_handler.node.pollOffloadedCalculation(struct)
+            df.addBoth(got_poll_response)
 
-    poll_cb = partial(reactor.callLater, offload_poll_wait, poll)
+    def got_response(response):
+        if response == "OK":
+            # Found a node that accepted our offload request!
+            # start the polling loop here.
+            logger.debug("Offload request accepted.")
+            schedule_poll()
+        else:
+            # Couldn't find a node to accept our offload request.
+            # Calculate it locally.
+            logger.debug("Offload requeest rejected.")
+            fail()
 
-    def request_accepted(contact):
-        logger.debug("REQUEST ACCEPTED!!")
-        # start the polling loop here.
-        df_chain.addCallback(poll_cb)
-        df_chain.callback(None)
+    schedule_poll = partial(reactor.callLater, offload_poll_wait, send_poll)
 
-    def farm_out_vector_calculation():
-        logger.debug("Attempting to farm out vector calculation")
-        df = _network_handler.node.sendOffloadCommand(audio_key, struct)
-        return df
+    logger.debug("Attempting to farm out vector calculation")
+    df = _network_handler.node.sendOffloadCommand(struct)
+    df.addCallback(got_response)
 
-    df = farm_out_vector_calculation()
-
-    # best case scenario, farming out the calculation works
-    df.addCallback(request_accepted)
-
-    # if farming out calculation fails (eg. times out)
-    df.addErrback(error)
-
-    logger.debug("-> returning update vector")
     return outer_df
 
 def initialize_storage(callback):
