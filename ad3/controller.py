@@ -324,3 +324,75 @@ class Controller(object):
         df.addCallback(got_tags)
         return df
 
+    def generate_plugin_output(self, file_name, file_key, plugin):
+        """ Generates and saves a PluginOutput object for the file/plugin
+        pair.
+
+        Immediately returns a deferred that will return the result of
+        saving the PluginOutput object.
+        """
+        def save_plugin_output(vector):
+            po = PluginOutput(vector, plugin.get_key(), file_key)
+            s_df = self.model.save(po)
+            return s_df
+
+        # Make blocking function "plugin.create_vector" nonblocking
+        # by deferring it to its own thread!
+        df = threads.deferToThread(plugin.create_vector, file_name)
+        df.addCallback(save_plugin_output)
+        return df
+
+    def blocking_generate_vectors(self, file_name, file_key, plugins):
+        """ Blocking function. Generates a dict of vectors for each
+        file_key/plugin pair.
+        """
+        outer_df = defer.Deferred()
+        results = {}
+
+        for plugin in plugins:
+            results[(file_key, plugin.get_key())] = plugin.create_vector(file_name)
+
+        return results
+
+    def generate_plugin_outputs(self, file_name, file_key):
+        """ Generates and saves a PluginOutput object for the provided file
+        and every Plugin object in the system.
+
+        Immediately returns a deferred that will return a list of generated
+        PluginOutput objects
+        """
+        outer_df = defer.Deferred()
+        outputs = []
+
+        def done(v):
+            outer_df.callback(outputs)
+
+        def save_plugin_outputs(results):
+            dfs = []
+            for key in results:
+                vector = results[key]
+                file_key, plugin_key = key
+                po = PluginOutput(vector, plugin_key, file_key)
+                df = self.model.save(po)
+
+                outputs.append(po)
+                dfs.append(df)
+
+            list_df = defer.DeferredList(dfs)
+            return list_df
+
+        def got_plugins(plugins):
+            # Generate the vectors in a thread.
+            # Immediately return a deferred which will return a dict of vectors
+            df = threads.deferToThread(
+                    blocking_generate_vectors,
+                    file_name, file_key, plugins
+                 )
+            return df
+
+        df = get_plugins()
+        df.addCallback(got_plugins)
+        df.addCallback(save_plugin_outputs)
+        df.addCallback(done)
+
+        return outer_df
