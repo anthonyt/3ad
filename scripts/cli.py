@@ -231,6 +231,9 @@ def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile='
     # Set up the controller
     controller = Controller(model, gaussian)
 
+    # FIXME: this should not be applied after the node is initialized, but i'm way too lazy right now to do it cleanly.
+    node.generate_all_plugin_vectors = controller.generate_all_plugin_vectors
+
     p.terminalProtocol.namespace['controller'] = controller
     p.terminalProtocol.namespace['userName'] = userName
     p.terminalProtocol.namespace['node'] = controller.model.get_network_handler().node
