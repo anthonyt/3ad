@@ -120,7 +120,9 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         logger.debug("Received an offload RPC - %r; %r",
                 file_uri, _rpcNodeContact)
 
-        if len(self.computations) > 0:
+        active_computations = [self.computations[c] for c in self.computations if not self.computations[c]['complete']]
+
+        if len(active_computations) > 0:
             logger.debug("DECLINING offload request")
             # If we are already processing something, decline this request
             return "NO"
@@ -209,7 +211,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
                 #        gets lost on the network, the requesting node won't be
                 #        able to re-request the results.
                 logger.debug("Poll status: Complete")
-                del self.computations[file_key]
+                #del self.computations[file_key]
             else:
                 logger.debug("Poll status: In Progress")
 
