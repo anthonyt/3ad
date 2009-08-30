@@ -201,6 +201,7 @@ class NetworkHandler(object):
         return df
 
     def dht_remove_tuples(self, dTuple):
+        logger.debug("Removing tuples matching %r", dTuple)
         df = defer.Deferred()
         outer_df = defer.Deferred()
 
@@ -874,16 +875,20 @@ def apply_tag_to_file(audio_file, tag):
 
 def remove_guessed_tags():
     outer_df = defer.Deferred()
+    logger.debug("_")
 
     def done(val):
+        logger.debug("remove_guessed_tags")
         outer_df.callback(val)
 
     def remove_tag_tuples(val):
+        logger.debug("remove_guessed_tags")
         tag_tuple = ("tag", None, "guessed_file", None)
         df = _network_handler.dht_remove_tuples(tag_tuple)
         return df
 
     def remove_audio_tuples(val):
+        logger.debug("remove_guessed_tags")
         audio_tuple = ("audio_file", None, "guessed_tag", None)
         df = _network_handler.dht_remove_tuples(audio_tuple)
         return df
