@@ -9,6 +9,12 @@ from sets import Set
 
 from logs import logger
 
+currently_generating = False
+generating_queue = []
+generating_df = defer.Deferred()
+generating_df.callback('start')
+
+
 class TagAggregator(object):
     """
     class to facilitate getting a list of tag objects from a list of tag names
@@ -149,21 +155,71 @@ class Controller(object):
             df_s = self.model.save(audio_file)
             return df_s
 
-        def got_vectors(result):
-            # Create new PluginOutput objects and store them on the network
-            if result is None:
-                df_p = self.generate_plugin_outputs(audio_file)
-            else:
-                df_p = self.generate_plugin_outputs_from_dict(result)
-
-            return df_p
-
-        df = self.model.special_generate_plugin_vectors(audio_file)
-        df.addCallback(got_vectors)
+        logger.debug("NB: Updating File Vectors for %r", audio_file)
+        df = self.get_vectors_eventually(audio_file)
         df.addCallback(get_file_vector)
         df.addCallback(save_file)
 
         return df
+
+
+    def get_vectors_eventually(self, audio_file):
+        def got_vectors(result):
+            logger.debug("  NB: Model generation returned %r for %r", type(result), audio_file)
+            # Create new PluginOutput objects and store them on the network
+            if result is None:
+                # if the model couldn't do its special generation, immediately,
+                # add the file to the generation queue.
+                logger.debug("    NB: Adding %r to the queue", audio_file)
+                df_p = defer.Deferred()
+                generating_queue.append((df_p, audio_file))
+                generating_df.addCallback(self.go_through_queue)
+            else:
+                logger.debug("    NB: Got the plugin outputs for %r!", audio_file)
+                df_p = self.generate_plugin_outputs_from_dict(result)
+
+            return df_p
+
+        logger.debug("NB: Trying model generation for %r", audio_file)
+        df = self.model.special_generate_plugin_vectors(audio_file)
+        df.addCallback(got_vectors)
+        return df
+
+
+    def go_through_queue(self, val):
+        logger.debug("NB: Going through the queue, because %r", val)
+        inner_df = defer.Deferred()
+
+        def generated(val, df, audio_file):
+            logger.debug("NB: Finished generating vectors for %r", audio_file)
+            df.callback(val)
+            return 'generated last one!'
+
+        def generated_eventually(val, df, audio_file):
+            logger.debug("NB: Finished eventually generating vectors for %r", audio_file)
+            df.callback(val)
+ 
+        logger.debug("NB: testing currently_generating")
+        if generating_queue:
+            currently_generating = True
+            df, audio_file = generating_queue.pop(0)
+            logger.debug("  NB: Begin generating vectors for %r", audio_file)
+            df_p = self.generate_plugin_outputs(audio_file)
+            df_p.addCallback(generated, df, audio_file)
+            df_p.addCallback(inner_df.callback)
+        else:
+            inner_df.callback('Nothing to generate at this time.')
+
+        logger.debug("NB: testing generating_queue")
+        while generating_queue:
+            df, audio_file = generating_queue.pop(0)
+            logger.debug("NB: testing (eventually)  %r", audio_file)
+            df_v = self.get_vectors_eventually(audio_file)
+            df_v.addCallback(generated_eventually, df, audio_file)
+
+        logger.debug("NB: returning")
+
+        return inner_df
 
 
     def guess_tags(self, audio_file=None, user_name=None):
