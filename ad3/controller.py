@@ -228,6 +228,7 @@ class Controller(object):
         scoped_tags = [0]
 
         def got_files(files):
+            logger.debug("guess_tags")
             tags = scoped_tags[0]
 
             dfs = []
@@ -241,6 +242,7 @@ class Controller(object):
             return list_df
 
         def got_tags(tags):
+            logger.debug("guess_tags")
             scoped_tags[0] = tags
 
             # take care of fetching the tag and audio file objects...
@@ -250,12 +252,12 @@ class Controller(object):
                 f_df = defer.Deferred()
                 f_df.callback([audio_file])
 
-            df.addCallback(got_files)
-            return df
+            return f_df
 
         def get_tags(val):
-            df = self.model.get_tags()
-            return df
+            logger.debug("guess_tags")
+            t_df = self.model.get_tags()
+            return t_df
 
         df = self.model.remove_guessed_tags()
         df.addCallback(get_tags)
