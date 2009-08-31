@@ -119,15 +119,15 @@ def train(data):
     net.updControl("RealvecSource/rv/mrs_realvec/data", frvec(data))
 
     # Set up the Classifier system
-    net.updControl("Classifier/cl/mrs_natural/nClasses", fnat(1))
+    net.updControl("GaussianClassifier/cl/mrs_natural/nClasses", fnat(1))
 
     # Loop over all the input, ticking the system, and updating the Classifier Mode
-    net.updControl("Classifier/cl/mrs_string/mode", fstr("train"))
+    net.updControl("GaussianClassifier/cl/mrs_string/mode", fstr("train"))
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
 
     # Take the system out of training mode, and tick it once to save its state
-    net.updControl("Classifier/cl/mrs_string/mode", fstr("predict"))
+    net.updControl("GaussianClassifier/cl/mrs_string/mode", fstr("predict"))
     net.tick()
 
     # Separate the classifier system and serialize it
@@ -174,8 +174,6 @@ def predict(data, classifier_string):
     while not net.getControl("RealvecSource/rv/mrs_bool/done").to_bool():
         net.tick()
         output = net.getControl("mrs_realvec/processedData").to_realvec()
-        distances = net.getControl("mrs_realvec/classProbabilities").to_realvec()
-        logger.debug("DISTANCES %r", array(distances))
         distance = output[2]
         guesses.append(distance)
 
