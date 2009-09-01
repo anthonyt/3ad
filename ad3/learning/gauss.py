@@ -10,12 +10,135 @@ class Gaussian(object):
         self.model = data_model
         self.tolerance = tolerable_distance
 
+    def calculate_file_and_tag_vectors(self):
+        scoped_tags = []
+        scoped_files = []
+        scoped_files_by_tag = {}
+        po_cmp = lambda a, b: cmp(a.plugin_key, b.plugin_key)
+        tag_cmp = lambda a, b: cmp(a.key, b.key)
+
+        def get_files(val):
+            df = self.model.get_audio_files()
+            return df
+
+        def get_tags(val):
+            df = self.model.get_tags()
+            return df
+
+        def got_files(files):
+            for f in files:
+                scoped_files.append(f)
+            return None
+
+        def got_tags(tags):
+            for t in tags:
+                scoped_tags.append(t)
+
+            scoped_tags.sort(tag_cmp)
+            return None
+
+        def calculate_first_file_vectors(val):
+            dfs = []
+
+            def got_outputs(plugin_outputs, file):
+                vec1 = []
+                vec2 = file.vector and file.vector[1] or None
+
+                # sort the plugin_outputs by plugin key.
+                for po in sorted(plugin_outputs, po_cmp):
+                    logger.debug("Appending vector of length %r to %r", len(po.vector), file)
+                    vec1.extend(po.vector)
+
+                file.vector = [vec1, vec2]
+
+            for file in scoped_files:
+                df = self.model.get_plugin_outputs(audio_file=file)
+                df.addCallback(got_outputs, file)
+                dfs.append(df)
+
+            return defer.DeferredList(dfs)
+
+        def calculate_first_tag_vectors(val):
+            dfs = []
+
+            def got_files(files, tag):
+                scoped_files_by_tag[tag.key] = [f.key for f in files]
+                vectors = [f.vector[0] for f in files]
+                try:
+                    vec1 = train(vectors)
+                except Exception, e:
+                    for i in range(0, len(vectors)):
+                        logger.debug('Vector %d(%d): %r', i, len(vectors[i]), vectors[i])
+                    raise e
+                vec2 = tag.vector and tag.vector[1] or None
+                tag.vector = [vec1, vec2]
+
+            for tag in scoped_tags:
+                df = self.model.get_audio_files(tag = tag)
+                df.addCallback(got_files, tag)
+                dfs.append(df)
+
+            return defer.DeferredList(dfs)
+
+        def calculate_second_file_vectors(val):
+            for file in scoped_files:
+                vec1 = file.vector[0]
+                vec2 = []
+                for tag in scoped_tags:
+                    prediction = predict([vec1], tag.vector[0])
+                    vec2.append(prediction[0])
+
+                file.vector = [vec1, vec2]
+
+            return None
+
+        def calculate_second_tag_vectors(val):
+            for tag in scoped_tags:
+                files = [
+                    f for f in scoped_files
+                    if f.key in scoped_files_by_tag[tag.key]
+                ]
+                vectors = [f.vector[1] for f in files]
+                vec1 = tag.vector[0]
+                logger.debug("Training second with %r", vectors)
+                vec2 = train(vectors)
+                tag.vector = [vec1, vec2]
+
+            return None
+
+        def save_files_and_tags(val):
+            dfs = []
+
+            for file in scoped_files:
+                df = self.model.save(file)
+                dfs.append(df)
+
+            for tag in scoped_tags:
+                df = self.model.save(tag)
+                dfs.append(df)
+
+            return defer.DeferredList(dfs)
+
+        df = defer.Deferred()
+        df.addCallback(get_files)
+        df.addCallback(got_files)
+        df.addCallback(get_tags)
+        df.addCallback(got_tags)
+        df.addCallback(calculate_first_file_vectors)
+        df.addCallback(calculate_first_tag_vectors)
+        df.addCallback(calculate_second_file_vectors)
+        df.addCallback(calculate_second_tag_vectors)
+        df.addCallback(save_files_and_tags)
+        df.callback(None)
+
 
     def calculate_tag_vector(self, tag):
         def got_files(files):
-            vectors = [f.vector for f in files]
-            tag_vector = train(vectors)
-            return tag_vector
+            vectors = [f.vector[0] for f in files]
+            vec1 = train(vectors)
+            vec2 = tag.vector and tag.vector[1] or None
+
+            return [vec1, vec2]
 
         df = self.model.get_audio_files(tag = tag)
         df.addCallback(got_files)
@@ -25,11 +148,14 @@ class Gaussian(object):
     def calculate_file_vector(self, file):
         def got_outputs(plugin_outputs):
             c = lambda a, b: cmp(a.plugin_key, b.plugin_key)
-            vector = []
+            vec1 = []
+            vec2 = file.vector and file.vector[1] or None
+
             # sort the plugin_outputs by plugin key.
             for po in sorted(plugin_outputs, c):
-                vector.extend(po.vector)
-            return vector
+                vec1.extend(po.vector)
+
+            return [vec1, vec2]
 
         df = self.model.get_plugin_outputs(audio_file=file)
         df.addCallback(got_outputs)
@@ -37,8 +163,8 @@ class Gaussian(object):
 
 
     def does_tag_match(self, file, tag):
-        data = [file.vector]
-        distances = predict(data, tag.vector)
+        data = [file.vector[1]]
+        distances = predict(data, tag.vector[1])
         logger.debug("DISTANCE: %r %r %r", distances[0], file, tag)
         return (distances[0] <= self.tolerance)
 
