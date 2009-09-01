@@ -801,6 +801,12 @@ def special_generate_plugin_vectors(audio_file):
         # 'complete', 'vectors', 'failed', 'downloaded'
         #  bool        dict       bool      bool
 
+        if not isinstance(response, dict):
+            # Oh noes, error condition!
+            logger.debug("Poll: probably timed out %r", response)
+            fail()
+            return None
+
         if response['failed']:
             logger.debug("Poll: failed")
             fail()
@@ -823,7 +829,7 @@ def special_generate_plugin_vectors(audio_file):
             logger.debug("Polling...")
             # execute a poll and call the "got_poll_response" method when it's done
             df = _network_handler.node.pollOffloadedCalculation(struct)
-            df.addCallback(got_poll_response)
+            df.addBoth(got_poll_response)
 
     def got_response(response):
         if response == "OK":
