@@ -5,6 +5,12 @@ def createVector(filename):
     mng = MarSystemManager()
     fnet = mng.create("Series", "fnet")
 
+    hz_sr = 11250   # samples per second
+    s_duration = 30 # seconds
+    win_size = 1024 # samples per window
+    hop_size = win_size / 2
+    num_frames = 66 # makes a 3 second window
+
     #------------------ Feature Network ------------------------------
 
     # Decode the file, downmix to mono, and downsample
@@ -27,21 +33,21 @@ def createVector(filename):
     #------------------- Set Parameters ------------------------------
 
     # Set the texture memory size to a 3-second window (66 analysis frames)
-    fnet.updControl("TextureStats/tStats/mrs_natural/memSize", MarControlPtr.from_natural(66))
+    fnet.updControl("TextureStats/tStats/mrs_natural/memSize", MarControlPtr.from_natural(num_frames))
 
     # Set the file name
     fnet.updControl("SoundFileSource/src/mrs_string/filename", MarControlPtr.from_string(filename))
 
     # Set the sample rate to 11250 Hz
-    factor = int(round(fnet.getControl("SoundFileSource/src/mrs_real/osrate").to_real()/11250.0))
+    factor = int(round(fnet.getControl("SoundFileSource/src/mrs_real/osrate").to_real()/hz_sr))
     fnet.updControl("DownSampler/ds/mrs_natural/factor", MarControlPtr.from_natural(factor))
 
     # Set the window to 1024 samples at 11250 Hz
     # Should be able to set with simply TimbreFeatures/tf/mrs_natural/winSize,
     # but that doesn't seem to work
-    fnet.updControl("TimbreFeatures/tf/Series/timeDomain/ShiftInput/si/mrs_natural/winSize", MarControlPtr.from_natural(1024))
-    fnet.updControl("TimbreFeatures/tf/Series/spectralShape/ShiftInput/si/mrs_natural/winSize", MarControlPtr.from_natural(1024))
-    fnet.updControl("TimbreFeatures/tf/Series/lpcFeatures/ShiftInput/si/mrs_natural/winSize", MarControlPtr.from_natural(1024))
+    fnet.updControl("TimbreFeatures/tf/Series/timeDomain/ShiftInput/si/mrs_natural/winSize", MarControlPtr.from_natural(win_size))
+    fnet.updControl("TimbreFeatures/tf/Series/spectralShape/ShiftInput/si/mrs_natural/winSize", MarControlPtr.from_natural(win_size))
+    fnet.updControl("TimbreFeatures/tf/Series/lpcFeatures/ShiftInput/si/mrs_natural/winSize", MarControlPtr.from_natural(win_size))
 
     # Find the length of the song
     slength = fnet.getControl("SoundFileSource/src/mrs_natural/size").to_natural()
@@ -50,13 +56,13 @@ def createVector(filename):
         raise Exception('InvalidLengthError', "File \"%s\" could not be read." % filename)
 
     # Find the number of samples resulting in a whole number of analysis windows by truncating
-    numsamps = int(((30*11250.0*factor)/512)*512)
+    numsamps = int(s_duration * hz_sr * factor) / hop_size * hop_size
 
     # Shift the start over so that the duration is in the middle
     start = int((slength - numsamps)/2)
 
-    fnet.updControl("SoundFileSource/src/mrs_natural/start", MarControlPtr.from_natural(start))
-    fnet.updControl("SoundFileSource/src/mrs_natural/duration", MarControlPtr.from_natural(numsamps))
+    fnet.updControl("SoundFileSource/src/mrs_natural/pos", MarControlPtr.from_natural(start))
+    fnet.updControl("SoundFileSource/src/mrs_real/duration", MarControlPtr.from_real(numsamps))
 
     # ----------------- Accumulator ---------------------------------
 
@@ -64,7 +70,8 @@ def createVector(filename):
     acc = mng.create("Accumulator", "acc")
 
     # nTimes is measured in number of analysis windows
-    acc.updControl("mrs_natural/nTimes", MarControlPtr.from_natural(int(((30*11250.0)/512))))
+    nTimes = int((s_duration * hz_sr) / hop_size)
+    acc.updControl("mrs_natural/nTimes", MarControlPtr.from_natural(nTimes))
 
     #------------------ Song Statistics -----------------------------
     # Fanout and calculate mean and standard deviation
@@ -82,7 +89,7 @@ def createVector(filename):
     tnet.addMarSystem(sstats)
 
     # set the hop size to 512 (needs to be set for the top-level network)
-    tnet.updControl("mrs_natural/inSamples", MarControlPtr.from_natural(factor*512))
+    tnet.updControl("mrs_natural/inSamples", MarControlPtr.from_natural(factor*hop_size))
 
     # Should only need to tick once
     tnet.tick()
