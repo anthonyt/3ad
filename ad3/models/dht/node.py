@@ -123,11 +123,11 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         active_computations = [self.computations[c] for c in self.computations if not self.computations[c]['complete']]
 
         if len(active_computations) > 0:
-            logger.debug("DECLINING offload request")
+            logger.info("DECLINING offload request")
             # If we are already processing something, decline this request
             return "NO"
 
-        logger.debug("ACCEPTING offload request")
+        logger.info("ACCEPTING offload request")
         self.computations[file_key] = {
             'complete': False,
             'vectors': None,
@@ -156,7 +156,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         def failure(err):
             # Crap. Something threw an exception inside
             # self.generate_all_plugin_vectors
-            logger.debug("Computation error :( %s")
+            logger.warn("Computation error :( %s")
             self.computations[file_key]['failed'] = True
             self.computations[file_key]['complete'] = True
 
@@ -166,7 +166,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
             return val
 
         def downloaded_file(tmp_file_name):
-            logger.debug("Finished downloading %s as %r", file_uri, tmp_file_name)
+            logger.info("Finished downloading %s as %r", file_uri, tmp_file_name)
 
             self.computations[file_key]['downloaded'] = True
             # Set up a deferred that will return a dict of plugin vectors
@@ -179,7 +179,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         def download_file():
             # Receive the file in the main loop, but spin processing off
             # into its own thread.
-            logger.debug("Downloading http://%s:%d%s",
+            logger.info("Downloading http://%s:%d%s",
                     _rpcNodeContact.address,
                     _rpcNodeContact.port,
                     file_uri)
