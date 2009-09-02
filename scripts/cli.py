@@ -726,15 +726,29 @@ def add_cal500_files(num=0, tag_em=True, min_examples=5):
 
     return df
 
+planet_lab_nodes = [
+    ('142.104.21.241', 44000),
+    ('142.104.21.245', 44000),
+    ('142.104.21.239', 44000),
+]
+home_nodes = [
+    ('24.68.144.250', 4000),
+    ('24.68.144.250', 4001)
+]
+known_nodes = []
+known_nodes.extend(planet_lab_nodes)
+known_nodes.extend(home_nodes)
 
 cmds = dict(
     test_conn = partial(connect, 4000, 4000, 'anthony', dbFile='bob.sqlite'),
-    connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=[('127.0.0.1', 4001)], dbFile='a.sqlite', logFile='a.log'),
-    connectb = partial(connect, 4001, 4001, 'user_b', knownNodes=[('127.0.0.1', 4000)], dbFile='b.sqlite', logFile='b.log'),
-    connectc = partial(connect, 4002, 4002, 'user_c', knownNodes=[('127.0.0.1', 4001)], dbFile='c.sqlite', logFile='c.log'),
-    # Connect to home from planet lab 1, and vice versa.
-    connectd = partial(connect, 4000, 4000, 'user_d', knownNodes=[('142.104.21.245', 4000)], dbFile='d.sqlite', logFile='d.log'),
-    connectp = partial(connect, 4000, 4000, 'user_p', knownNodes=[('24.68.144.250', 4000)], dbFile='p.sqlite', logFile='p.log'),
+    # Connect from home
+    connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=known_nodes, dbFile='a.sqlite', logFile='a.log'),
+    connectb = partial(connect, 4001, 4001, 'user_b', knownNodes=known_nodes, dbFile='b.sqlite', logFile='b.log'),
+    connectc = partial(connect, 4002, 4002, 'user_c', knownNodes=known_nodes, dbFile='c.sqlite', logFile='c.log'),
+    # Connect from planet lab
+    connectp1 = partial(connect, 44000, 44000, 'user_p1', knownNodes=known_nodes, dbFile='p.sqlite', logFile='p.log'),
+    connectp3 = partial(connect, 44000, 44000, 'user_p3', knownNodes=known_nodes, dbFile='p.sqlite', logFile='p.log'),
+    connectp4 = partial(connect, 44000, 44000, 'user_p4', knownNodes=known_nodes, dbFile='p.sqlite', logFile='p.log'),
 
     add_bobs_files = partial(add_files, [
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Aries' Theme.wav",
