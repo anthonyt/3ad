@@ -9,6 +9,7 @@ import tty
 import termios
 import keyword
 import __builtin__
+import random
 
 from functools import partial
 from IPython.completer import Completer
@@ -202,20 +203,28 @@ def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile='
     model = ad3.models.dht
     dataStore = SQLiteDataStore(dbFile=dbFile)
     node = ad3.models.dht.Node(udpPort=udpPort, tcpPort=tcpPort, dataStore=dataStore)
+#    node = entangled.dtuple.DistributedTupleSpacePeer(udpPort=udpPort, dataStore=dataStore)
+#    node = entangled.node.EntangledNode(udpPort=udpPort, dataStore=dataStore)
+#    node = entangled.kademlia.node.Node(udpPort=udpPort, dataStore=dataStore)
+
 
     formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
     handler = logging.FileHandler(logFile)
     handler.setFormatter(formatter)
     # set up the kademlia logs
-    kademlia_logs.addHandler(handler)
-    kademlia_logs.logger.setLevel(logging.DEBUG)
+#    kademlia_logs.addHandler(handler)
+#    kademlia_logs.logger.setLevel(logging.DEBUG)
     # set up the tuple space logs
-    dtuple_logs = logging.getLogger('dtuple')
-    dtuple_logs.addHandler(handler)
-    dtuple_logs.setLevel(logging.INFO)
+#    dtuple_logs = logging.getLogger('dtuple')
+#    dtuple_logs.addHandler(handler)
+#    dtuple_logs.setLevel(logging.INFO)
+    # set up the HTTP logs
+#    http_logs = logging.getLogger('3ad_http')
+#    http_logs.addHandler(handler)
+#    http_logs.setLevel(logging.DEBUG)
     # set up the ad3 logs
     ad3_logs.addHandler(handler)
-    ad3_logs.logger.setLevel(logging.DEBUG)
+    ad3_logs.logger.setLevel(logging.INFO)
 
     #print "->", "joining network..."
     node.joinNetwork(knownNodes)
@@ -428,7 +437,7 @@ def add_files(paths, tags=None):
     return outer_df
 
 @cont
-def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginOutput=None):
+def get_files(fileName=None, userName=None, tag=None, guessedTag=None, pluginOutput=None):
     """
     @param fileName: if provided, returns only files with a matching file name
     @type  fileName: unicode
@@ -436,11 +445,11 @@ def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginO
     @param userName: if provided, returns only files with a matching user name
     @type  userName: unicode
 
-    @param tags: if provided, returns only files manually tagged with the provided tag
-    @type  tags: Tag object
+    @param tag: if provided, returns only files manually tagged with the provided tag
+    @type  tag: Tag object
 
-    @param guessedTags: if provided, returns only files automatically tagged with the provided tag
-    @type  guessedTags: Tag object
+    @param guessedTag: if provided, returns only files automatically tagged with the provided tag
+    @type  guessedTag: Tag object
 
     @param pluginOutput: if provided, returns only the file associated with this output
     @type  pluginOutput: PluginOutput object
@@ -451,7 +460,7 @@ def get_files(fileName=None, userName=None, tags=None, guessedTags=None, pluginO
     if userName is '':
         username = None
 
-    df = n['controller'].model.get_audio_files(file_name=fileName, user_name=userName, tag=tags, guessed_tag=guessedTags, plugin_output=pluginOutput)
+    df = n['controller'].model.get_audio_files(file_name=fileName, user_name=userName, tag=tag, guessed_tag=guessedTag, plugin_output=pluginOutput)
     return df
 
 @cont
@@ -545,6 +554,69 @@ def update_predictions():
     df = n['controller'].guess_tags(user_name=n['userName'])
     return df
 
+@sync
+@cont
+def get_accuracy():
+    """
+    Returns the accuracy of the system.
+    """
+    n = p.terminalProtocol.namespace
+    real = {}
+    guessed = {}
+    all_files = {}
+    def got_real(files, tag):
+        real[tag.key] = [f.key for f in files]
+
+    def got_guessed(files, tag):
+        guessed[tag.key] = [f.key for f in files]
+
+    def got_all_files_ever(files, tags):
+        all_files['files'] = len(files)
+        all_files['tags'] = len(tags)
+
+    def got_tags(tags):
+        dfs = []
+        for tag in tags:
+            t_df = n['controller'].model.get_audio_files(tag=tag, user_name=n['userName'])
+            t_df.addCallback(got_real, tag)
+            g_df = n['controller'].model.get_audio_files(guessed_tag=tag, user_name=n['userName'])
+            g_df.addCallback(got_guessed, tag)
+            dfs.append(t_df)
+            dfs.append(g_df)
+
+        f_df = n['controller'].model.get_audio_files(user_name=n['userName'])
+        f_df.addCallback(got_all_files_ever, tags)
+        dfs.append(f_df)
+
+        l_df = defer.DeferredList(dfs)
+        return l_df
+
+    def got_all(val):
+        potential_correct = 0
+        correctly_guessed = 0
+        incorrectly_guessed = 0
+
+        for tag in real:
+            potential_correct += len(real[tag])
+            correctly_guessed += len(
+                [f for f in guessed[tag] if f in real[tag]]
+            )
+            incorrectly_guessed += len(
+                [f for f in guessed[tag] if f not in real[tag]]
+            )
+
+        return dict(
+            potential_correct = potential_correct,
+            correctly_guessed = correctly_guessed,
+            incorrectly_guessed = incorrectly_guessed,
+            potential_incorrect = all_files['files'] * all_files['tags'] - potential_correct,
+        )
+
+    df = n['controller'].model.get_tags()
+    df.addCallback(got_tags)
+    df.addCallback(got_all)
+    return df
+
 @cont
 def create_db_snapshot(outFile):
     """
@@ -584,6 +656,77 @@ def create_db_snapshot(outFile):
     cur.execute('INSERT INTO backup.data(%s) SELECT %s FROM data' % (col_str, col_str))
     con.commit()
 
+@sync
+@cont
+def create_file_and_tag_vectors():
+    """
+    Assuming PluginOutput objects exist for every file/plugin pair,
+    create file vectors for all files, then create tag vectors based
+    on those.
+    """
+    n = p.terminalProtocol.namespace
+    df = n['controller'].mine.calculate_file_and_tag_vectors(user_name=n['userName'])
+    return df
+
+@sync
+@cont
+def add_cal500_files(num=0, tag_em=True, min_examples=5):
+    files = {}
+    tags = {}
+    n = p.terminalProtocol.namespace
+
+    def done(v, results):
+        return results, tags
+
+    def got_files(v):
+        # parse the results from the wierd format that the controller returns.
+        results = [v[k][0] for k in v if v[k][1]]
+
+        if tag_em:
+            dfs = []
+            for file in results:
+                good_tags = [t for t in files[file.file_name] if tags[t] >= min_examples]
+                df = n['controller'].tag_files([file], good_tags)
+                dfs.append(df)
+
+            df_list = defer.DeferredList(dfs)
+            df_list.addCallback(done, results)
+            return df_list
+        else:
+            return results
+
+    # Parse the annotations into a dict of "filename => tag list"
+    annotations = open('cal500/annotations')
+    lines = [line.strip().split('\t') for line in annotations.readlines()]
+    for line in lines:
+        name, tag = line
+        name = '/Users/anthony/Documents/school/jan_2009/csc466/3ad/scripts/cal500/' + name + '.wav'
+        if name not in files:
+            files[name] = [tag]
+        else:
+            files[name].append(tag)
+
+    names = files.keys()
+
+    # pick num random files to add to the system.
+    if num > 0:
+#        random.shuffle(names)
+        names = names[:num]
+
+    if tag_em:
+        for name in names:
+            for tag in files[name]:
+                if tag not in tags:
+                    tags[tag] = 1
+                else:
+                    tags[tag] += 1
+
+    df = n['controller'].add_files(names, user_name=n['userName'])
+    df.addBoth(got_files)
+
+    return df
+
+
 cmds = dict(
     test_conn = partial(connect, 4000, 4000, 'anthony', dbFile='bob.sqlite'),
     connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=[('127.0.0.1', 4001)], dbFile='a.sqlite', logFile='a.log'),
@@ -617,6 +760,8 @@ cmds = dict(
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_05 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Bourree.mp3.wav",
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_06 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Double.mp3.wav",
     ]),
+    add_cal500_files=add_cal500_files,
+    create_file_and_tag_vectors=create_file_and_tag_vectors,
     add_tags=add_tags,
     clear_network_cache=clear_network_cache,
     print_network_cache=print_network_cache,
@@ -624,6 +769,7 @@ cmds = dict(
     sync = sync,
     add_file=add_file,
     add_files=add_files,
+    get_accuracy=get_accuracy,
     get_files=sync(get_files),
     get_tags=sync(get_tags),
     print_file=sync(print_file),
@@ -655,6 +801,8 @@ tty.setraw(fd)
 try:
     p = ServerProtocol(ConsoleManhole, namespace=namespace)
     stdio.StandardIO(p)
+#    import cProfile
+#    cProfile.run('reactor.run()', 'cProfile.output')
     reactor.run()
 finally:
     termios.tcsetattr(fd, termios.TCSANOW, oldSettings)

@@ -1,6 +1,7 @@
 import sys
 import os
 from numpy import array, concatenate, divide, mean
+from copy import copy
 from ad3.models.dht import AudioFile, Plugin, PluginOutput, Tag
 from twisted.internet import defer
 from twisted.internet import threads
@@ -13,6 +14,7 @@ currently_generating = False
 generating_queue = []
 generating_df = defer.Deferred()
 generating_df.callback('start')
+go_through_scheduled = 0
 
 
 class TagAggregator(object):
@@ -165,6 +167,8 @@ class Controller(object):
 
     def get_vectors_eventually(self, audio_file):
         def got_vectors(result):
+            global go_through_scheduled
+
             logger.debug("  NB: Model generation returned %r for %r", type(result), audio_file)
             # Create new PluginOutput objects and store them on the network
             if result is None:
@@ -173,7 +177,9 @@ class Controller(object):
                 logger.debug("    NB: Adding %r to the queue", audio_file)
                 df_p = defer.Deferred()
                 generating_queue.append((df_p, audio_file))
-                generating_df.addCallback(self.go_through_queue)
+                if go_through_scheduled < 1:
+                    generating_df.addCallback(self.go_through_queue)
+                    go_through_scheduled += 1
             else:
                 logger.debug("    NB: Got the plugin outputs for %r!", audio_file)
                 df_p = self.generate_plugin_outputs_from_dict(result)
@@ -187,10 +193,15 @@ class Controller(object):
 
 
     def go_through_queue(self, val):
+        global go_through_scheduled, currently_generating
+        go_through_scheduled -= 1
+
         logger.debug("NB: Going through the queue, because %r", val)
         inner_df = defer.Deferred()
 
         def generated(val, df, audio_file):
+            global currently_generating
+            currently_generating = False
             logger.debug("NB: Finished generating vectors for %r", audio_file)
             df.callback(val)
             return 'generated last one!'
@@ -208,11 +219,20 @@ class Controller(object):
             df_p.addCallback(generated, df, audio_file)
             df_p.addCallback(inner_df.callback)
         else:
+            currently_generating = False
             inner_df.callback('Nothing to generate at this time.')
 
         logger.debug("NB: testing generating_queue")
-        while generating_queue:
-            df, audio_file = generating_queue.pop(0)
+
+        # use a secondary queue. 
+        # in the event that no deferreds are scheduled, get_vectors_eventaully
+        # may call back in order, and append to generating_queue, so we create
+        # a copy, which we know won't have extra crap added to it.
+        clone_queue = copy(generating_queue)
+        while clone_queue:
+            df, audio_file = clone_queue.pop(0)
+            generating_queue.pop(0)
+
             logger.debug("NB: testing (eventually)  %r", audio_file)
             df_v = self.get_vectors_eventually(audio_file)
             df_v.addCallback(generated_eventually, df, audio_file)
@@ -285,6 +305,8 @@ class Controller(object):
                 # make a new file!
                 file = AudioFile(file_name, user_name=user_name)
                 result_tuples[file_name] = (file, True)
+
+                logger.info("Adding new Audio File: %r", file)
 
                 # Take care of saving the file object, as well as creating
                 # the file.vector and PluginOutput objects, all at once!
@@ -407,7 +429,10 @@ class Controller(object):
         results = {}
 
         for plugin in plugins:
-            results[(file_key, plugin.get_key())] = plugin.create_vector(file_name)
+            vec = plugin.create_vector(file_name)
+            key = (file_key, plugin.get_key())
+            logger.debug("Got plugin vector of length %d", len(vec))
+            results[key] = vec
 
         return results
 
@@ -417,6 +442,7 @@ class Controller(object):
 
         Immediately returns a deferred which will return a dict of vectors
         """
+        logger.info('Generating plugin vectors for %r and %r', file_name, plugins)
         df = threads.deferToThread(
                 self.blocking_generate_vectors,
                 plugins, file_name, file_key
@@ -450,6 +476,7 @@ class Controller(object):
         for key in results:
             vector = results[key]
             file_key, plugin_key = key
+            logger.debug("Created plugin output of length %d", len(vector))
             po = PluginOutput(vector, plugin_key, file_key)
             df = self.model.save(po)
 

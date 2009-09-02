@@ -10,7 +10,7 @@ class Gaussian(object):
         self.model = data_model
         self.tolerance = tolerable_distance
 
-    def calculate_file_and_tag_vectors(self):
+    def calculate_file_and_tag_vectors(self, user_name=None):
         scoped_tags = []
         scoped_files = []
         scoped_files_by_tag = {}
@@ -18,7 +18,7 @@ class Gaussian(object):
         tag_cmp = lambda a, b: cmp(a.key, b.key)
 
         def get_files(val):
-            df = self.model.get_audio_files()
+            df = self.model.get_audio_files(user_name=user_name)
             return df
 
         def get_tags(val):
@@ -74,7 +74,7 @@ class Gaussian(object):
                 tag.vector = [vec1, vec2]
 
             for tag in scoped_tags:
-                df = self.model.get_audio_files(tag = tag)
+                df = self.model.get_audio_files(tag = tag, user_name=user_name)
                 df.addCallback(got_files, tag)
                 dfs.append(df)
 
@@ -130,6 +130,7 @@ class Gaussian(object):
         df.addCallback(calculate_second_tag_vectors)
         df.addCallback(save_files_and_tags)
         df.callback(None)
+        return df
 
 
     def calculate_tag_vector(self, tag):
@@ -162,10 +163,42 @@ class Gaussian(object):
         return df
 
 
+    def calculate_second_tag_vector(self, tag):
+        def got_files(files):
+            vectors = [f.vector[1] for f in files]
+            vec1 = tag.vector and tag.vector[0] or None
+            vec2 = train(vectors)
+
+            return [vec1, vec2]
+
+        df = self.model.get_audio_files(tag = tag)
+        df.addCallback(got_files)
+        return df
+
+
+    def calculate_second_file_vector(self, file):
+        def got_tags(tags):
+            logger.debug("guess_tags")
+            # Sort the tags! Important!
+            c = lambda a, b: cmp(a.key, b.key)
+
+            vec1 = file.vector[0]
+            vec2 = [
+                predict([file.vector[0]], tag.vector[0])[0]
+                for tag in sorted(tags, c)
+            ]
+
+            return [vec1, vec2]
+
+        df = self.model.get_tags()
+        df.addCallback(got_tags)
+        return df
+
+
     def does_tag_match(self, file, tag):
         data = [file.vector[1]]
         distances = predict(data, tag.vector[1])
-        logger.debug("DISTANCE: %r %r %r", distances[0], file, tag)
+        logger.info("DISTANCE: %r %r %r", distances[0], tag, file)
         return (distances[0] <= self.tolerance)
 
 
@@ -229,6 +262,7 @@ def train(data):
     Trains a Gaussian classifier to detect vectors matching that tag.
     Returns a gzipped serialization of that classifier.
     """
+    logger.debug("len(data) = %d; len(data[0]) = %d, type(data) = %r; type(data[0]) = %r", len(data), len(data[0]), type(data), type(data[0]))
     data = prepare_data(data)
     net = mng.create("Series", "net")
 

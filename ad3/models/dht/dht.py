@@ -197,7 +197,7 @@ class NetworkHandler(object):
         logger.debug("-> searching for tuples based on %r", dTuple)
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
-#        df.addErrback(error)
+        df.addErrback(error)
         return df
 
     def dht_remove_tuples(self, dTuple):
@@ -235,7 +235,7 @@ class NetworkHandler(object):
         logger.debug("-> Attempting to store tuple: %r", dTuple)
         df = self.node.put(dTuple, trackUsage=False)
         df.addCallback(success)
-#        df.addErrback(error)
+        df.addErrback(error)
         return df
 
 
@@ -363,9 +363,9 @@ def set_network_handler(obj):
 
     # Define our plugins:
     plugins = [
-        Plugin('charlotte', 'ad3.analysis_plugins.charlotte'),
+#        Plugin('charlotte', 'ad3.analysis_plugins.charlotte'),
         Plugin('bextract', 'ad3.analysis_plugins.bextract_plugin'),
-        Plugin('centroid', 'ad3.analysis_plugins.centroid_plugin')
+#        Plugin('centroid', 'ad3.analysis_plugins.centroid_plugin')
     ]
 
 def get_network_handler():
@@ -840,7 +840,7 @@ def special_generate_plugin_vectors(audio_file):
         else:
             # Couldn't find a node to accept our offload request.
             # Calculate it locally.
-            logger.debug("Offload requeest rejected.")
+            logger.debug("Offload request rejected.")
             fail()
 
     schedule_poll = partial(reactor.callLater, offload_poll_wait, send_poll)
@@ -859,10 +859,10 @@ def initialize_storage(callback):
     pass
 
 def apply_tag_to_file(audio_file, tag):
+    logger.info("APPLYING TAG TO FILE: %r %r", tag, audio_file)
+
     tag_tuple = ("tag", tag.get_key(), "audio_file", audio_file.get_key())
     audio_tuple = ("audio_file", audio_file.get_key(), "tag", tag.get_key())
-
-    logger.debug("APPLYING TAG TO FILE: %r", tag)
 
     def save_tag_tuple(val):
         tag_df = _network_handler.dht_store_tuple(tag_tuple)
