@@ -212,16 +212,16 @@ def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile='
     handler = logging.FileHandler(logFile)
     handler.setFormatter(formatter)
     # set up the kademlia logs
-#    kademlia_logs.addHandler(handler)
-#    kademlia_logs.logger.setLevel(logging.DEBUG)
+    kademlia_logs.addHandler(handler)
+    kademlia_logs.logger.setLevel(logging.INFO)
     # set up the tuple space logs
-#    dtuple_logs = logging.getLogger('dtuple')
-#    dtuple_logs.addHandler(handler)
-#    dtuple_logs.setLevel(logging.INFO)
+    dtuple_logs = logging.getLogger('dtuple')
+    dtuple_logs.addHandler(handler)
+    dtuple_logs.setLevel(logging.INFO)
     # set up the HTTP logs
-#    http_logs = logging.getLogger('3ad_http')
-#    http_logs.addHandler(handler)
-#    http_logs.setLevel(logging.DEBUG)
+    http_logs = logging.getLogger('3ad_http')
+    http_logs.addHandler(handler)
+    http_logs.setLevel(logging.INFO)
     # set up the ad3 logs
     ad3_logs.addHandler(handler)
     ad3_logs.logger.setLevel(logging.INFO)
