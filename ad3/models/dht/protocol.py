@@ -22,14 +22,14 @@ class Request(twh.Request):
         self.server = self.channel
 
     def process(self):
-        logger.debug("Serving: %r", self.path)
+        logger.info("Serving: %r", self.path)
         """
         Called when a request completes (and all data is received)
         """
         # Make sure this request had a useful request_key
         request_keys = self.requestHeaders.getRawHeaders('x-request-key', None)
         if not request_keys:
-            logger.debug("No request keys were set in this request.")
+            logger.warn("No request keys were set in this request.")
             return
         request_key = request_keys[0]
 
@@ -37,13 +37,13 @@ class Request(twh.Request):
         # try to remove it from the list of pending request_keys
         requested_file = self.server.factory.get_request_key(request_key)
         if not requested_file:
-            logger.debug("Requested file %r was not set to readable.", request_key)
+            logger.warn("Requested file %r was not set to readable.", request_key)
             return
 
         # Make sure the file requested by the client (self.path) is the one we
         # wanted to give them (requested_file).
         if not requested_file == self.path:
-            logger.debug("Client requested %r, but I was prepared to serve %r",
+            logger.warn("Client requested %r, but I was prepared to serve %r",
                     self.path, requested_file)
             return
 
@@ -135,7 +135,7 @@ class HTTPClient(twh.HTTPClient):
         self.receivingFile = False
 
     def sendFileRequest(self, filename):
-        logger.debug("Sending file request; GET %r", filename)
+        logger.info("Sending file request; GET %r", filename)
         self.sendCommand('GET', filename)
         self.sendHeader('x-request-key', self.factory.request_key)
         self.endHeaders()
@@ -160,7 +160,7 @@ class HTTPClient(twh.HTTPClient):
         @type status: C{str}
         @param message: e.g. 'OK'
         """
-        logger.debug("Got status %r: %r", status, message)
+        logger.info("Got status %r: %r", status, message)
         if status == '200':
             self.receivingFile = True
 
