@@ -30,6 +30,9 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         self._oobServerFactory = None
         self.computations = {}
 
+        self.cachedValues = {}
+        self.markedValues = {}
+
     def joinNetwork(self, knownNodeAddresses=None):
         entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
             self, knownNodeAddresses=knownNodeAddresses
@@ -216,4 +219,46 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
                 logger.debug("Poll status: In Progress")
 
         return result
+
+    def iterativeStore(self, key, value, originalPublisherID=None, age=0):
+        self.cachedValues[key] = value
+        self.markedValues[key] = (value, originalPublisherID, age)
+
+        df = defer.Deferred()
+        df.callback(None)
+        return df
+
+    def _iterativeFind(self, key, startupShortlist=None, rpc='findNode'):
+        """ Transparently caches values fetched from the DHT.
+
+        TODO: Build caching into the actual storage mechanism (eg, sqlite DB)
+              The original kademlia spec incorporates caching.
+        """
+        def cacheValue(val):
+            self.cachedValues[key] = val
+            return val
+
+        if rpc == 'findValue' and key in self.cachedValues:
+            df = defer.Deferred()
+            df.callback(self.cachedValues[key])
+        else:
+            df = entangled.dtuple.DistributedTupleSpacePeer._iterativeFind(
+                    self, key, startupShortlist=startupShortlist, rpc=rpc)
+            if rpc == 'findValue':
+                df.addCallback(cacheValue)
+        return df
+
+    def flushWrites(self):
+        dfs = []
+        for key in self.markedValues.keys():
+            value, originalPublisherId, age = self.markedValues.pop(key)
+            df = entangled.dtuple.DistributedTupleSpacePeer.iterativeStore(
+                self, key, value, originalPublisherID, age)
+            dfs.append(df)
+
+        df_list = defer.DeferredList(dfs)
+        return df_list
+
+    def flushCache(self):
+        self.cachedValues = {}
 
