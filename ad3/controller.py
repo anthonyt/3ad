@@ -15,6 +15,7 @@ generating_queue = []
 generating_df = defer.Deferred()
 generating_df.callback('start')
 go_through_scheduled = 0
+network_size = 3
 
 
 class TagAggregator(object):
@@ -177,7 +178,7 @@ class Controller(object):
                 logger.debug("    NB: Adding %r to the queue", audio_file)
                 df_p = defer.Deferred()
                 generating_queue.append((df_p, audio_file))
-                if go_through_scheduled < 1:
+                if go_through_scheduled * network_size < len(generating_queue):
                     generating_df.addCallback(self.go_through_queue)
                     go_through_scheduled += 1
             else:
@@ -229,13 +230,16 @@ class Controller(object):
         # may call back in order, and append to generating_queue, so we create
         # a copy, which we know won't have extra crap added to it.
         clone_queue = copy(generating_queue)
-        while clone_queue:
+        i = 0
+        while clone_queue and i < network_size:
             df, audio_file = clone_queue.pop(0)
             generating_queue.pop(0)
 
-            logger.debug("NB: testing (eventually)  %r", audio_file)
+            logger.debug("NB: testing (eventually, %d)  %r", i, audio_file)
             df_v = self.get_vectors_eventually(audio_file)
             df_v.addCallback(generated_eventually, df, audio_file)
+
+            i += 1
 
         logger.debug("NB: returning")
 
