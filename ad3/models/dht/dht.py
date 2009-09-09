@@ -31,47 +31,39 @@ class KeyAggregator(object):
         self.tuple_list = tuple_list
         self.key_lists = []
 
+    def got_tuples(self, tuples, dTuple):
+        # Got a new list of tuples...
+        if tuples is None:
+            tuples = []
+            logger.debug("KeyAggregator found no keys on network for %r", dTuple)
+        else:
+            logger.debug("KeyAggregator found keys on network for %r", dTuple)
+
+        keys = [t[1] for t in tuples]
+        logger.debug("KeyAggregator Got Key List: %r", keys)
+
+        self.key_lists.append(keys)
+
+    def done(self, val):
+        # Get the maximum intersecting set of keys in all tuples.
+        keys = Set(self.key_lists[0])
+
+        for ks in self.key_lists[1:]:
+            keys = keys.intersection(ks)
+
+        return list(keys)
+
     def go(self):
-        outer_df = defer.Deferred()
-
-        def got_tuples(tuples):
-            keys = [t[1] for t in tuples]
-            logger.debug("KeyAggregator Got Key List: %r", keys)
-
-            self.key_lists.append(keys)
-
-            # if we have got all the values we asked for,
-            # find the common keys, and call the callback function
-            if len(self.key_lists) == len(self.tuple_list):
-                keys = Set(self.key_lists[0])
-
-                for ks in self.key_lists[1:]:
-                    keys = keys.intersection(ks)
-
-                outer_df.callback(list(keys))
-
-        def cache_tuples(result_tuples, dTuple):
-            if result_tuples is None:
-                result_tuples = []
-            # add these tuples to the cache!!
-            self.net_handler.cache_store_tuples(dTuple, result_tuples)
-            # continue execution
-            logger.debug("KeyAggregator found keys on network")
-            got_tuples(result_tuples)
-
         # for each search tuple, run our got_tuples function on the resulting tuple rows
+        dfs = []
         for dTuple in self.tuple_list:
-            # attempt to fetch cached results
-            result_tuples = self.net_handler.cache_get_tuples(dTuple)
-            if result_tuples is not None:
-                logger.debug("KeyAggregator found cached keys")
-                got_tuples(result_tuples)
-            else:
-                # if there are no cached results, get new results
-                df = self.net_handler.dht_get_tuples(dTuple)
-                df.addCallback(cache_tuples, dTuple)
+            df = self.net_handler.dht_get_tuples(dTuple)
+            df.addCallback(self.got_tuples, dTuple)
 
-        return outer_df
+        list_df = defer.DeferredList(dfs)
+        list_df.addCallback(self.done)
+
+        return list_df
 
 
 class ObjectAggregator(object):
@@ -308,43 +300,6 @@ class NetworkHandler(object):
         lifetime = int(time()) + 300
         self._cache[key] = (lifetime, obj)
 
-    def cache_get_tuples(self, search_tuple):
-        """
-        if the tuple list exists in our cache
-        and its lifetime has not expired
-        return it. else return None
-        """
-        sanitized = []
-        for t in search_tuple:
-            if t is None:
-                sanitized.append(t)
-            else:
-                sanitized.append(t.encode('base64'))
-        key = simplejson.dumps(sanitized)
-
-        if key in self._cache:
-            entry = self._cache[key]
-            if int(time()) < entry[0]:
-                logger.debug("-> Fetching object from the cache %r TTL: %d s", entry[1], int(time()) - entry[0])
-                return entry[1]
-
-        return None
-
-    def cache_store_tuples(self, search_tuple, result_tuples):
-        """
-        store the tuple list in our cache
-        with an end of life timestamp
-        """
-        sanitized = []
-        for t in search_tuple:
-            if t is None:
-                sanitized.append(t)
-            else:
-                sanitized.append(t.encode('base64'))
-        key = simplejson.dumps(sanitized)
-
-        lifetime = int(time()) - 10
-        self._cache[key] = (lifetime, result_tuples)
 
 _network_handler = None
 plugins = []
