@@ -46,6 +46,9 @@ class KeyAggregator(object):
 
     def done(self, val):
         # Get the maximum intersecting set of keys in all tuples.
+        if not self.key_lists:
+            return []
+
         keys = Set(self.key_lists[0])
 
         for ks in self.key_lists[1:]:

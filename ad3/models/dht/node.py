@@ -2,6 +2,7 @@
 import os
 import random
 from functools import partial
+import cPickle
 # entangled
 import entangled
 import entangled.dtuple
@@ -20,11 +21,6 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
                  dataStore=None, routingTable=None,
                  networkProtocol=None):
 
-        entangled.dtuple.DistributedTupleSpacePeer.__init__(
-            self, id=id, udpPort=udpPort, dataStore=dataStore,
-            routingTable=routingTable, networkProtocol=networkProtocol
-        )
-
         self.tcpPort = tcpPort
         self._oobListeningPort = None
         self._oobServerFactory = None
@@ -32,6 +28,16 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
 
         self.cachedValues = {}
         self.markedValues = {}
+
+        self.timesCacheFetched = 0
+        self.bytesCacheFetched = 0
+        self.timesMarked = 0
+        self.bytesMarked = 0
+
+        entangled.dtuple.DistributedTupleSpacePeer.__init__(
+            self, id=id, udpPort=udpPort, dataStore=dataStore,
+            routingTable=routingTable, networkProtocol=networkProtocol
+        )
 
     def joinNetwork(self, knownNodeAddresses=None):
         entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
@@ -221,8 +227,12 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
         return result
 
     def iterativeStore(self, key, value, originalPublisherID=None, age=0):
+        logger.debug("Caching value and write!")
         self.cachedValues[key] = value
         self.markedValues[key] = (value, originalPublisherID, age)
+
+#        self.bytesMarked += len(cPickle.dumps(value))
+        self.timesMarked += 1
 
         df = defer.Deferred()
         df.callback(None)
@@ -235,13 +245,19 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
               The original kademlia spec incorporates caching.
         """
         def cacheValue(val):
+            logger.debug("Caching value!")
             self.cachedValues[key] = val
             return val
 
         if rpc == 'findValue' and key in self.cachedValues:
+            logger.debug("Returning cached value!")
             df = defer.Deferred()
-            df.callback(self.cachedValues[key])
+            df.callback({key: self.cachedValues[key]})
+
+#            self.bytesCacheFetched += len(cPickle.dumps(self.cachedValues[key]))
+            self.timesCacheFetched += 1
         else:
+            logger.debug("No cached value available, or %s != findValue", rpc)
             df = entangled.dtuple.DistributedTupleSpacePeer._iterativeFind(
                     self, key, startupShortlist=startupShortlist, rpc=rpc)
             if rpc == 'findValue':
@@ -251,7 +267,7 @@ class Node(entangled.dtuple.DistributedTupleSpacePeer):
     def flushWrites(self):
         dfs = []
         for key in self.markedValues.keys():
-            value, originalPublisherId, age = self.markedValues.pop(key)
+            value, originalPublisherID, age = self.markedValues.pop(key)
             df = entangled.dtuple.DistributedTupleSpacePeer.iterativeStore(
                 self, key, value, originalPublisherID, age)
             dfs.append(df)
