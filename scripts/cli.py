@@ -12,6 +12,7 @@ import __builtin__
 import random
 
 from functools import partial
+from copy import copy
 from IPython.completer import Completer
 
 from twisted.internet import selectreactor
@@ -208,23 +209,23 @@ def connect(udpPort=None, tcpPort=None, userName=None, knownNodes=None, dbFile='
 #    node = entangled.kademlia.node.Node(udpPort=udpPort, dataStore=dataStore)
 
 
-    formatter = logging.Formatter("%(name)s: %(levelname)s %(created)f %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
+    formatter = logging.Formatter("%(name)s: %(levelname)s %(filename)s:%(lineno)d (in %(funcName)s): %(message)s")
     handler = logging.FileHandler(logFile)
     handler.setFormatter(formatter)
     # set up the kademlia logs
     kademlia_logs.addHandler(handler)
-    kademlia_logs.logger.setLevel(logging.INFO)
+    kademlia_logs.logger.setLevel(logging.DEBUG)
     # set up the tuple space logs
     dtuple_logs = logging.getLogger('dtuple')
     dtuple_logs.addHandler(handler)
-    dtuple_logs.setLevel(logging.INFO)
+    dtuple_logs.setLevel(logging.DEBUG)
     # set up the HTTP logs
     http_logs = logging.getLogger('3ad_http')
     http_logs.addHandler(handler)
     http_logs.setLevel(logging.INFO)
     # set up the ad3 logs
     ad3_logs.addHandler(handler)
-    ad3_logs.logger.setLevel(logging.INFO)
+    ad3_logs.logger.setLevel(logging.DEBUG)
 
     #print "->", "joining network..."
     node.joinNetwork(knownNodes)
@@ -680,7 +681,16 @@ def add_cal500_files(num=0, tag_em=True, min_examples=5):
 
     def got_files(v):
         # parse the results from the wierd format that the controller returns.
+        ad3_logs.logger.debug("Got files (%d): %r", len(v), v)
         results = [v[k][0] for k in v if v[k][1]]
+#        results = v
+        names = [f.file_name for f in results]
+        for name in names:
+            for tag in files[name]:
+                if tag not in tags:
+                    tags[tag] = 1
+                else:
+                    tags[tag] += 1
 
         if tag_em:
             dfs = []
@@ -713,19 +723,53 @@ def add_cal500_files(num=0, tag_em=True, min_examples=5):
 #        random.shuffle(names)
         names = names[:num]
 
-    if tag_em:
-        for name in names:
-            for tag in files[name]:
-                if tag not in tags:
-                    tags[tag] = 1
-                else:
-                    tags[tag] += 1
-
+    #df = n['controller'].model.get_audio_files(user_name=n['userName'])
     df = n['controller'].add_files(names, user_name=n['userName'])
     df.addBoth(got_files)
 
     return df
 
+@sync
+@cont
+def remove_untagged_files():
+    n = p.terminalProtocol.namespace
+    node = n['controller'].model.get_network_handler().node
+
+    def got_tags(tags, file):
+        ad3_logs.logger.debug("Got Tags (%d): %r for %r", len(tags), tags, file)
+        if len(tags) == 0:
+            df_t = remove_file_tuples(file)
+            df_f = remove_file(file)
+            df_list = defer.DeferredList([df_t, df_f])
+            return df_list
+        else:
+            return None
+
+    def remove_file_tuples(file):
+        file_tuple = ("audio_file", file.key, file.file_name, file.user_name)
+        df = n['controller'].model._network_handler.dht_remove_tuples(file_tuple)
+        return df
+
+    def remove_file(file):
+        df = node.iterativeDelete(file.key)
+        return df
+
+    def got_files(files):
+        ad3_logs.logger.debug("Got Files (%d): %r", len(files), files)
+        dfs = []
+        for file in files:
+            df = n['controller'].model.get_tags(audio_file=file)
+            df.addCallback(got_tags, file)
+            dfs.append(df)
+        df_list = defer.DeferredList(dfs)
+        return df_list
+
+    df = n['controller'].model.get_audio_files(user_name=n['userName'])
+    df.addBoth(got_files)
+
+    return df
+
+# Complete list of contacts
 planet_lab_nodes = [
     ('142.104.21.241', 44000),
     ('142.104.21.245', 44000),
@@ -739,41 +783,59 @@ known_nodes = []
 known_nodes.extend(planet_lab_nodes)
 known_nodes.extend(home_nodes)
 
+# Remove the node itself from each nodes list of contacts.
+a_nodes = copy(known_nodes)
+a_nodes.remove(('24.68.144.250', 4000))
+b_nodes = copy(known_nodes)
+b_nodes.remove(('24.68.144.250', 4001))
+c_nodes = copy(known_nodes)
+#c_nodes.remove(('24.68.144.250', 4002))
+p1_nodes = copy(known_nodes)
+p1_nodes.remove(('142.104.21.241', 44000))
+p3_nodes = copy(known_nodes)
+p3_nodes.remove(('142.104.21.245', 44000))
+p4_nodes = copy(known_nodes)
+p4_nodes.remove(('142.104.21.239', 44000))
+
+#a_nodes = [('127.0.0.1', 4001)]
+b_nodes = [('127.0.0.1', 4000)]
+
 cmds = dict(
     test_conn = partial(connect, 4000, 4000, 'anthony', dbFile='bob.sqlite'),
     # Connect from home
-    connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=known_nodes, dbFile='a.sqlite', logFile='a.log'),
-    connectb = partial(connect, 4001, 4001, 'user_b', knownNodes=known_nodes, dbFile='b.sqlite', logFile='b.log'),
-    connectc = partial(connect, 4002, 4002, 'user_c', knownNodes=known_nodes, dbFile='c.sqlite', logFile='c.log'),
+    connecta = partial(connect, 4000, 4000, 'user_a', knownNodes=a_nodes, dbFile='a.sqlite', logFile='a.log'),
+    connectb = partial(connect, 4001, 4001, 'user_b', knownNodes=b_nodes, dbFile='b.sqlite', logFile='b.log'),
+    connectc = partial(connect, 4002, 4002, 'user_c', knownNodes=c_nodes, dbFile='c.sqlite', logFile='c.log'),
     # Connect from planet lab
-    connectp1 = partial(connect, 44000, 44000, 'user_p1', knownNodes=known_nodes, dbFile='p.sqlite', logFile='p.log'),
-    connectp3 = partial(connect, 44000, 44000, 'user_p3', knownNodes=known_nodes, dbFile='p.sqlite', logFile='p.log'),
-    connectp4 = partial(connect, 44000, 44000, 'user_p4', knownNodes=known_nodes, dbFile='p.sqlite', logFile='p.log'),
+    connectp1 = partial(connect, 44000, 44000, 'user_p1', knownNodes=p1_nodes, dbFile='p.sqlite', logFile='p.log'),
+    connectp3 = partial(connect, 44000, 44000, 'user_p3', knownNodes=p3_nodes, dbFile='p.sqlite', logFile='p.log'),
+    connectp4 = partial(connect, 44000, 44000, 'user_p4', knownNodes=p4_nodes, dbFile='p.sqlite', logFile='p.log'),
 
     add_bobs_files = partial(add_files, [
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Aries' Theme.wav",
         "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - I. Prelude.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - II. Allemande.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - III. Courante.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - IV. Sarabande.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - V. Bourrees I & II.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Legebit.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Night of Silence.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 1.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 2.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 4.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 5.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Terra's Theme.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Theme to Voyager.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_01 Johann Sebastian Bach - Suite for Lute in E minor BWV 996 - Allemande 1.mp3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_01 Johann Sebastian Bach - Suite for Lute in E minor BWV 996 - Allemande.mp3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_02 Johann Sebastian Bach - Partita for Lute in C minor BWV 997 - Sarabande.mp3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_03 Johann Sebastian Bach - Partita for Lute in C minor BWV 997 - Gigue.mp3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_04 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Sarabande.mp3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_05 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Bourree.mp3.wav",
-        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_06 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Double.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - II. Allemande.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - III. Courante.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - IV. Sarabande.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Bach - Suite for Violoncello Solo No. 3 in C major BWV 1009 - V. Bourrees I & II.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Legebit.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Night of Silence.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 1.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 2.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 4.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Nuages 5.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Terra's Theme.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/Theme to Voyager.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_01 Johann Sebastian Bach - Suite for Lute in E minor BWV 996 - Allemande 1.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_01 Johann Sebastian Bach - Suite for Lute in E minor BWV 996 - Allemande.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_02 Johann Sebastian Bach - Partita for Lute in C minor BWV 997 - Sarabande.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_03 Johann Sebastian Bach - Partita for Lute in C minor BWV 997 - Gigue.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_04 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Sarabande.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_05 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Bourree.mp3.wav",
+#        "/Users/anthony/Documents/3ad_audio/new_audio/bob's audio/_06 Johann Sebastian Bach - Partita for Violin Solo No. 1 in B minor BWV 1002 - Double.mp3.wav",
     ]),
+    a_nodes=a_nodes,
     add_cal500_files=add_cal500_files,
     create_file_and_tag_vectors=create_file_and_tag_vectors,
     add_tags=add_tags,
@@ -794,7 +856,8 @@ cmds = dict(
     create_db_snapshot=create_db_snapshot,
     store_a_bunch_of_data=store_a_bunch_of_data,
     read_a_bunch_of_data=read_a_bunch_of_data,
-    find_a_bunch_of_data=find_a_bunch_of_data
+    find_a_bunch_of_data=find_a_bunch_of_data,
+    remove_untagged_files=remove_untagged_files,
 )
 
 namespace = dict(
@@ -815,9 +878,9 @@ tty.setraw(fd)
 try:
     p = ServerProtocol(ConsoleManhole, namespace=namespace)
     stdio.StandardIO(p)
-#    import cProfile
-#    cProfile.run('reactor.run()', 'cProfile.output')
-    reactor.run()
+    import cProfile
+    cProfile.run('reactor.run()', 'cProfile.output')
+#    reactor.run()
 finally:
     termios.tcsetattr(fd, termios.TCSANOW, oldSettings)
     os.write(fd, "\r\x1bc\r")
