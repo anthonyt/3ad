@@ -1,6 +1,11 @@
 import ad3.models.abstract
 import simplejson
 import hashlib
+import urllib
+import tempfile
+import random
+import os
+import entangled
 import entangled.dtuple
 import entangled.kademlia.contact
 import entangled.kademlia.msgtypes
@@ -8,6 +13,7 @@ from entangled.kademlia.node import rpcmethod
 from time import time
 from sets import Set
 from twisted.internet import defer
+from twisted.internet import reactor
 
 class KeyAggregator(object):
     # Once initialized with a list of tuples to match against
@@ -672,10 +678,53 @@ def update_vector(plugin, audio_file):
     @param audio_file: the audio file to run the plugin on
     @type  audio_file: AudioFile
     """
-    vector = plugin.create_vector(str(audio_file.file_name))
-    po = PluginOutput(vector, plugin.key, audio_file.key)
-    df = save(po)
-    return df
+    outer_df = defer.Deferred()
+    def done(val):
+        print "TRIGGERING OUTER_DF", val
+        outer_df.callback(val)
+
+    def calculate_vector_yourself(val):
+        vector = plugin.create_vector(str(audio_file.file_name))
+        po = PluginOutput(vector, plugin.key, audio_file.key)
+        df = save(po)
+        df.addCallback(done)
+        return df
+
+    def error(failure):
+        print "Error getting vector from contact", failure.getErrorMessage()
+        calculate_vector_yourself(None)
+
+    def got_poll(val):
+#        timeoutCall = reactor.callLater(5, poll)
+        pass
+
+    def poll():
+        pass
+
+
+    def request_accepted(val):
+        print "REQUEST ACCEPTED!! by", val
+        # start the polling loop here.
+#        timeoutCall = reactor.callLater(5, poll)
+        df = calculate_vector_yourself(val)
+        return df
+
+    def farm_out_vector_calculation():
+        print "Attempting to farm out vector calculation"
+
+        hash = {'module_name': plugin.module_name, 'file_uri': 'http://127.0.0.1/audio' + audio_file.file_name}
+        json = simplejson.dumps(hash)
+        df = _network_handler.node.sendOffloadCommand(audio_file.key, json)
+        return df
+
+    df = farm_out_vector_calculation()
+
+    # best case scenario, farming out the calculation works
+    df.addCallback(request_accepted)
+    # if farming out calculation fails (eg. times out)
+    df.addErrback(error)
+
+    return outer_df
 
 def initialize_storage(callback):
     """ Initializes an empty storage environment.
@@ -758,22 +807,81 @@ def guess_tag_for_file(audio_file, tag):
     return outer_df
 
 class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
-    def sendCustomCommand(self, key, value, originalPublisherID=None, age=0):
-        if originalPublisherID == None:
+    def sendOffloadCommand(self, key, value):
+        def executeRPC(nodes):
+            contact = random.choice(nodes)
             originalPublisherID = self.id
-        # Prepare a callback for doing "STORE" RPC calls
-        def executeCustomRPCs(nodes):
-            #print '        .....execStoreRPCs called'
-            for contact in nodes:
-                contact.custom(key, value, originalPublisherID, age)
-            return nodes
+            age = 0
+
+            print "SENDING RPC TO:", contact
+            df = contact.offload(key, value, originalPublisherID, age)
+            return df
+
         # Find k nodes closest to the key...
         df = self.iterativeFindNode(key)
-        # ...and send them STORE RPCs as soon as they've been found
-        df.addCallback(executeCustomRPCs)
+        df.addCallback(executeRPC)
+
+        return df
+
+    def pollOffloadedCalculation(self, key, value, contact):
+        originalPublisherID = self.id
+        age = 0
+        df = contact.poll(key, value, originalPublisherID, age)
         return df
 
     @rpcmethod
-    def custom(self, key, value, originalPublisherID=None, age=0, **kwargs):
-        print "RECEIVED A CUSTOM RPC!"
+    def offload(self, key, value, originalPublisherID=None, age=0, **kwargs):
+        hash = simplejson.loads(value)
+        plugin_module = hash['module_name']
+        file_uri = hash['file_uri']
+        id = plugin_module + file_uri
+
+        if not hasattr(self, 'computations'):
+            self.computations = {}
+        self.computations[plugin_module+file_uri] = {'complete': False, 'vector': None, 'failed': False}
+
+        def do_computation(val):
+            plugin = Plugin('temp', plugin_module)
+            print "Downloading", file_uri
+            print urllib.quote(file_uri)
+            (file_name, headers) = urllib.urlretrieve('http://'+urllib.quote(file_uri[7:]))
+            print "Computing vector"
+            vector = plugin.create_vector(file_name)
+            self.computations[id]['complete'] = True
+            self.computations[id]['vector'] = vector
+            os.remove(file_name)
+            return None
+
+        def computation_error(failure):
+            print "Computation error :(", failure.getErrorMessage()
+            self.computations[id]['complete'] = True
+            self.computations[id]['failed'] = True
+
+        df = defer.Deferred()
+        df.addCallback(do_computation)
+        df.addErrback(computation_error)
+        df.callback(None)
+
+        #file = tempfile.NamedTemporaryFile(suffix=key.encode('hex'))
+        #file.write(value)
+        print "RECEIVED AN OFFLOAD RPC!", file_uri, plugin_module
         return "OK"
+
+    @rpcmethod
+    def poll(self, key, value, originalPublisherID=None, age=0, **kwargs):
+        hash = simplejson.loads(value)
+        plugin_module = hash['module_name']
+        file_uri = hash['file_uri']
+        id = plugin_module + file_uri
+
+        if not hasattr(self, 'computations') or not self.computations.has_key(id):
+            # we've never heard of the requested offload operation. make something up!
+            result = {'complete': True, 'vector': None, 'failed': True}
+        elif self.computations[id]['complete']:
+            # we've finished the requested offload operation. remove if from the list and return it
+            result = self.computations.pop(id)
+        else:
+            # we haven't finished the requested offload operation, but we have some data on it
+            result = self.computations[id]
+
+        return simplejson.dumps(result)
