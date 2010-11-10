@@ -1,6 +1,10 @@
 import ad3.models.abstract
 import simplejson
 import hashlib
+import entangled.dtuple
+import entangled.kademlia.contact
+import entangled.kademlia.msgtypes
+from entangled.kademlia.node import rpcmethod
 from time import time
 from sets import Set
 from twisted.internet import defer
@@ -753,3 +757,23 @@ def guess_tag_for_file(audio_file, tag):
 
     return outer_df
 
+class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
+    def sendCustomCommand(self, key, value, originalPublisherID=None, age=0):
+        if originalPublisherID == None:
+            originalPublisherID = self.id
+        # Prepare a callback for doing "STORE" RPC calls
+        def executeCustomRPCs(nodes):
+            #print '        .....execStoreRPCs called'
+            for contact in nodes:
+                contact.custom(key, value, originalPublisherID, age)
+            return nodes
+        # Find k nodes closest to the key...
+        df = self.iterativeFindNode(key)
+        # ...and send them STORE RPCs as soon as they've been found
+        df.addCallback(executeCustomRPCs)
+        return df
+
+    @rpcmethod
+    def custom(self, key, value, originalPublisherID=None, age=0, **kwargs):
+        print "RECEIVED A CUSTOM RPC!"
+        return "OK"
