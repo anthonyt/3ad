@@ -62,7 +62,7 @@ class ObjectAggregator(object):
 
         # for each key, run our got_value function on the value row
         for key in self.key_list:
-#            print "->", "Searching for key..", key.encode('hex')
+#            #print "->", "Searching for key..", key.encode('hex')
             o = self.net_handler.cache_get_obj(key)
             if o is not None:
                 self.objects.append(o)
@@ -80,7 +80,7 @@ class NetworkHandler(object):
         self._cache = {}
 
     def obj_from_row(self, row):
-        print "->", "OBJ FROM ROW", row
+        #print "->", "OBJ FROM ROW", row
         h = simplejson.loads(row)
 
         if h['type'] == "plugin":
@@ -105,7 +105,7 @@ class NetworkHandler(object):
 
 
     def hash_function(self, plain_key):
-        print "->", "Generating a hash for", plain_key
+        #print "->", "Generating a hash for", plain_key
         h = hashlib.sha1()
         h.update(plain_key)
         return h.digest()
@@ -134,9 +134,10 @@ class NetworkHandler(object):
 
     def dht_store_value(self, key, value):
         def success(result):
-            print "->", 'stored value:', result
+            #print "->", 'stored value:', result
+            return result
 
-        print "->", "Attempting to store value", key.encode('hex'), "=>", value
+        #print "->", "Attempting to store value", key.encode('hex'), "=>", value
         df = self.node.iterativeStore(key, value)
         df.addCallback(success)
         return df
@@ -153,7 +154,7 @@ class NetworkHandler(object):
             print "->", 'an error occurred:', failure.getErrorMessage()
             callback(None)
 
-#        print "->", "searching for tuples based on", dTuple
+#        #print "->", "searching for tuples based on", dTuple
         df = self.node.readIfExists(dTuple, 0)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -182,13 +183,13 @@ class NetworkHandler(object):
 
     def dht_store_tuple(self, dTuple):
         def success(result):
-            print "->", 'stored tuple:', result
-            return "dht_store_tuple"
+            #print "->", 'stored tuple:', result
+            return result
 
         def error(failure):
             print "->", 'an error occurred:', failure.getErrorMessage()
 
-        print "->", "Attempting to store tuple:", dTuple
+        #print "->", "Attempting to store tuple:", dTuple
         df = self.node.put(dTuple, trackUsage=False)
         df.addCallback(success)
 #        df.addErrback(error)
@@ -204,16 +205,16 @@ class NetworkHandler(object):
         """
         def got_keys(keys):
             if len(keys) == 0:
-                print "->", "KA object found nothing."
+                #print "->", "KA object found nothing."
                 callback([])
             else:
                 # if we actually have keys returned
                 # call our tuple agregator to find corresponding value rows
-                print "->", "KA object found", len(keys), "keys. Making a OA object with key list."
+                #print "->", "KA object found", len(keys), "keys. Making a OA object with key list."
                 ta = ObjectAggregator(self, keys)
                 ta.go(callback)
 
-        print "->", "Making a KA object with tuple list:", tuple_list
+        #print "->", "Making a KA object with tuple list:", tuple_list
         ka = KeyAggregator(self, tuple_list)
         ka.go(got_keys)
 
@@ -242,7 +243,7 @@ class NetworkHandler(object):
         if key in self._cache:
             entry = self._cache[key]
             if int(time()) < entry[0]:
-                print "-> Fetching item from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
+                #print "-> Fetching item from the cache", entry[1], "TTL:", int(time()) - entry[0], 's'
                 return entry[1]
 
         return None
@@ -263,7 +264,7 @@ def set_network_handler(obj):
     should be an instance of the network handler class above
     will be used by all functions below
     """
-    print "->", "setting network handler!", obj
+    #print "->", "setting network handler!", obj
     global _network_handler
     _network_handler = obj
 
@@ -653,7 +654,7 @@ def save(obj):
     @param obj: the object to save
     @type  obj: Saveable
     """
-    print "->", "saving object...", obj
+    #print "->", "saving object...", obj
     df = obj.save()
     return df
 
@@ -683,7 +684,7 @@ def apply_tag_to_file(audio_file, tag):
     tag_tuple = ("tag", tag.key, "audio_file", audio_file.key)
     audio_tuple = ("audio_file", audio_file.key, "tag", tag.key)
 
-    print "APPLYING TAG TO FILE:", tag
+    #print "APPLYING TAG TO FILE:", tag
 
     def save_tag_tuple(val):
         tag_df = _network_handler.dht_store_tuple(tag_tuple)
