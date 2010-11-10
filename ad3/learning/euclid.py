@@ -12,7 +12,7 @@ def euclidean_distance(a, b):
     return sqrt(sum_of_squares)
 
 class Euclidean(object):
-    def __init__(self, data_model, tolerable_distance = 200):
+    def __init__(self, data_model, tolerable_distance = 31):
         self.model = data_model
         self.tolerance = tolerable_distance
 
@@ -46,7 +46,9 @@ class Euclidean(object):
 
 
     def does_tag_match(self, file, tag):
-        if euclidean_distance(tag.vector, file.vector) <= self.tolerance:
+        distance = euclidean_distance(tag.vector, file.vector)
+        print "DISTANCE:", distance, file, tag
+        if distance <= self.tolerance:
             return True
         return False
 
