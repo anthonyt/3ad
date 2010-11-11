@@ -449,7 +449,7 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, user_name+"'s Library: 3AD Demo")
         frame.Show(True)
 
-        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5001), ('127.0.0.1', 5002)]
+        knownNodes = [('24.68.144.235', 4002), ('192.168.1.142', 4003), ('127.0.0.1', 4001)]
         udpPort = int(sys.argv[1])
 
 
