@@ -227,16 +227,21 @@ class MyMenu(wx.Frame):
 
         df = defer.Deferred()
 
-        def file_added(file):
-            print "--->", "added", file, file.key.encode('hex')
-            return "file_added"
+        def file_added(result):
+            (file, added) = result
+            if added:
+                print "--->", "added", file, file.key.encode('hex')
+                return "file_added"
+            else:
+                print "--->", "file already exists:", file, file.key.encode('hex')
+                return "file_added_false"
 
         def plugin_added(plugin):
             print "--->", "added", plugin, plugin.key.encode('hex')
             return "plugin_added"
 
         def add_file(val, file_name, tags):
-            file_name = u"/Users/anthony/Documents/school/csc466/3ad/"+file_name
+            file_name = u"/Users/anthony/"+file_name
             add_df = self.controller.add_file(file_added, file_name, tags)
             return add_df
 
