@@ -22,7 +22,7 @@ class MyMenu(wx.Frame):
     panels = None
 
     def __init__(self, parent, id, title):
-        wx.Frame.__init__(self, parent, id, title, wx.DefaultPosition, wx.Size(600, 450))
+        wx.Frame.__init__(self, parent, id, title, wx.DefaultPosition, wx.Size(600, 500))
 
         # setup some uninitialized instance variables
         self.txt_search = None
@@ -274,11 +274,15 @@ class MyMenu(wx.Frame):
         df = self.controller.guess_tags(updated)
 
     def SearchFiles(self, event):
+        def file_name_cmp(f1, f2):
+            return cmp(f1.file_name, f2.file_name)
+
         def got_files(files):
             print "->", files
             self.lc.DeleteAllItems()
             self.displayed_files = files
             self.statusbar.SetStatusText('. . . Searching . . .')
+            files = sorted(files, file_name_cmp)
 
             for file in files:
                 num_items = self.lc.GetItemCount()
