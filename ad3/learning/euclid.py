@@ -1,7 +1,6 @@
-from numpy import mean, array, dot, sqrt, subtract
+from numpy import mean, array, dot, sqrt, subtract, zeros, copy
 from twisted.internet import defer
 
-# FIXME: this should be defined elsewhere
 def euclidean_distance(a, b):
     """
     takes two numpy arrays, a, b, both of length n

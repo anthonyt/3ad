@@ -87,6 +87,7 @@ class MyMenu(wx.Frame):
         btn_demo = wx.Button(panel, 4, "Add Demo Data")
         btn_upd_tag = wx.Button(panel, 5, "Update Tag Vectors")
         btn_upd_guess = wx.Button(panel, 6, "Guess Tags for Files")
+        btn_upd_test = wx.Button(panel, 7, "Test Classifiers")
 
         # setup sizer for the main panel
         sizer = wx.GridBagSizer(px_gap2, px_gap2)
@@ -97,6 +98,7 @@ class MyMenu(wx.Frame):
         sizer.Add(btn_demo, (4, 0), flag=wx.EXPAND)
         sizer.Add(btn_upd_tag, (5, 0), flag=wx.EXPAND)
         sizer.Add(btn_upd_guess, (6, 0), flag=wx.EXPAND)
+        sizer.Add(btn_upd_test, (7, 0), flag=wx.EXPAND)
         panel.SetSizer(sizer)
 
         # add some event callbacks!
@@ -106,6 +108,7 @@ class MyMenu(wx.Frame):
         self.Bind(wx.EVT_BUTTON, self.AddDemoData, id=4)
         self.Bind(wx.EVT_BUTTON, self.UpdateTagVectors, id=5)
         self.Bind(wx.EVT_BUTTON, self.UpdateGuessedTags, id=6)
+        self.Bind(wx.EVT_BUTTON, self.test_classifiers, id=7)
 
         # set some instance variables
         self.txt_search = txt_search
@@ -327,6 +330,92 @@ class MyMenu(wx.Frame):
         self.Destroy()
         sys.exit(0)
 
+    def test_classifiers(self, event):
+        data = [
+            [1, 1, 2],
+            [1, 2, 1],
+            [2, 4, 6],
+            [2, 5, 9],
+            [2, 1, 1],
+            [2, 1, 2],
+            [2, 1, 9]
+        ]
+        in_class = [False, False, True, True, False, False, True]
+
+#        # instantiate our classifiers
+#        gaussian = Gaussian(self.model, 100)
+#        svm = SVM(self.model)
+#        euclidean_distance = euclid.euclidean_distance
+
+        # Get all instances in the class
+        from numpy import copy, mean
+
+        d1 = copy([data[i] for i in range(0, len(data)) if in_class[i]])
+
+        # get all instances period
+        d2 = copy(data)
+
+        # Get the gaussian guesses. Give a tolerance of 100
+        classifier_string = gauss.train(d1)
+        guesses_g = gauss.predict(d2, classifier_string)
+        print guesses_g
+        guesses_g = [g < 100 for g in guesses_g]
+        print "Size of classifier string:", len(classifier_string)
+
+        # Get the SVM guesses.
+        classifier_string = svm.train(d1)
+        guesses_s = svm.predict(d2, classifier_string)
+        print "Size of classifier string:", len(classifier_string)
+
+        # Get the euclidean guesses. Give a tolerance of 5.
+        mean_vector = mean(d1, axis=0)
+        guesses_e = [euclid.euclidean_distance(d, mean_vector)<5 for d in d2]
+
+        # Compress all answers into a single array
+        answers = [[
+                    in_class[i],
+                    guesses_s[i],
+                    guesses_g[i],
+                    guesses_e[i]
+                   ] for i in range(0, len(d2)) ]
+
+        # Set up our counters for positive matches, negative matches
+        s1 = [b for b in answers if b[0] is True]
+        total_p = len(s1)
+        svm_tp = float(len([a for a in s1 if a[1] == True]))
+        gau_tp = float(len([a for a in s1 if a[2] == True]))
+        euc_tp = float(len([a for a in s1 if a[3] == True]))
+
+        s2 = [b for b in answers if b[0] is False]
+        total_n = len(s2)
+        svm_tn = float(len([a for a in s2 if a[1] == False]))
+        gau_tn = float(len([a for a in s2 if a[2] == False]))
+        euc_tn = float(len([a for a in s2 if a[3] == False]))
+
+        # evaluate recall and specificity
+        svm_recall = svm_tp/total_p
+        gau_recall = gau_tp/total_p
+        euc_recall = euc_tp/total_p
+        svm_spec = svm_tn/total_n
+        gau_spec = gau_tn/total_n
+        euc_spec = euc_tn/total_n
+
+        """
+        for i in range(0, len(d2)):
+            print "Actual:", answers[i][0], \
+                "  SVM:", answers[i][1], \
+                "  Gaussian:", answers[i][2], \
+                "  Euclidean:", answers[i][3]
+        """
+
+        # Print a report
+        print "SVM Recall:      ", svm_recall, "  SVM Specificity:      ", svm_spec
+        print "Gaussian Recall: ", gau_recall, "  Gaussian Specificity: ", gau_spec
+        print "Euclidean Recall:", euc_recall, "  Euclidean Specificity:", euc_spec
+
+
+
+
 
 class MyApp(wx.App):
     def OnInit(self):
@@ -366,13 +455,16 @@ import ad3.models
 import ad3.models.dht
 from ad3.models.dht import AudioFile, Plugin
 from ad3.learning.euclid import Euclidean
+from ad3.learning.gauss import Gaussian
+from ad3.learning.svm import SVM
+from ad3.learning import *
 from ad3.controller import Controller
 
 defer.setDebugging(True)
 
 model = ad3.models.dht
-euclid = Euclidean(model)
-controller = Controller(model, euclid)
+euclidean = Euclidean(model)
+controller = Controller(model, euclidean)
 
 app = MyApp(0)
 
