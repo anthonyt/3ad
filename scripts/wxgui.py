@@ -123,8 +123,8 @@ class MyMenu(wx.Frame):
         self.lc.SetColumnWidth(0, 200)
         self.lc.SetColumnWidth(1, 180)
         self.lc.SetColumnWidth(2, 180)
-        self.lc.SetColumnWidth(3, 150)
-        self.lc.SetColumnWidth(4, 150)
+        self.lc.SetColumnWidth(3, 200)
+        self.lc.SetColumnWidth(4, 400)
 
         sizer.Add(self.lc, (0, 0), flag=wx.EXPAND)
         sizer.AddGrowableRow(0)
@@ -166,7 +166,14 @@ class MyMenu(wx.Frame):
     def AddFiles(self, event):
         file_dlg = wx.FileDialog(self, "Choose a file", os.getcwd(), "", "", wx.OPEN | wx.MULTIPLE)
 
-        def file_added(file):
+        def file_added(result):
+            (file, added) = result
+            if added:
+                print "--->", "added", file, file.key.encode('hex')
+                return "file_added"
+            else:
+                print "--->", "file already exists:", file, file.key.encode('hex')
+                return "file_added_false"
             print "--->", "added", file, file.key.encode('hex')
 
         def add_file(val, file_name, tags):

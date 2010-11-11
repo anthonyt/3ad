@@ -265,7 +265,7 @@ class Controller(object):
                     return v_df
 
                 def fire_outer_df(val):
-                    outer_df.callback(file)
+                    outer_df.callback((file, True))
 
                 df.addCallback(save_file)
                 df.addCallback(create_vectors)
@@ -295,7 +295,7 @@ class Controller(object):
             else:
                 # if a matching file already exists, return None to the callback method
                 # and signal outer_df as being completed.
-                outer_df.callback(None)
+                outer_df.callback((file, False))
 
 
         #print "\n"
