@@ -205,14 +205,14 @@ class MyMenu(wx.Frame):
 
     def AddDemoData(self, event):
         file_data = [
-            (u"audio/Cello note a.wav", [u"cello", u"strings"]),
-            (u"audio/Cello note c.wav", [u"cello", u"strings"]),
-            (u"audio/Cello note g.wav", [u"cello", u"strings"]),
-            (u"audio/_05 Allemanda - Partita No. 6 in E minor.m4a.wav", [u"piano"]),
-            (u"audio/_06 Sonata in A Major D664.wav", [u"piano"]),
-            (u"audio/_06 To Zanarkand.m4a.wav", [u"piano"]),
-            (u"audio/_07 Eyes On Me.m4a.wav", [u"piano"]),
-            (u"audio/_09 Sonata in A Major D664.wav", [u"piano"]),
+#            (u"old_audio/Cello note a.wav", [u"cello", u"strings"]),
+#            (u"old_audio/Cello note c.wav", [u"cello", u"strings"]),
+#            (u"old_audio/Cello note g.wav", [u"cello", u"strings"]),
+            (u"old_audio/MattP - Allemanda - Partita No. 6 in E minor.m4a.wav", [u"piano"]),
+            (u"old_audio/MattP - Sonata in A Major D664.wav", [u"piano"]),
+            (u"old_audio/MattP - To Zanarkand.m4a.wav", [u"piano"]),
+            (u"old_audio/MattP - Eyes On Me.m4a.wav", [u"piano"]),
+            (u"old_audio/MattP - Sonata in A Major D664.wav", [u"piano"]),
 #            ("audio/Cello note a.wav", []),
 #            ("audio/Cello note c.wav", []),
 #            ("audio/Cello note g.wav", [])
@@ -220,8 +220,8 @@ class MyMenu(wx.Frame):
         ]
 
         plugins = [
-            ('charlotte', 'ad3.analysis_plugins.charlotte'),
-#            ('bextract', 'ad3.analysis_plugins.bextract_plugin'),
+#            ('charlotte', 'ad3.analysis_plugins.charlotte'),
+            ('bextract', 'ad3.analysis_plugins.bextract_plugin'),
 #            ('centroid', 'ad3.analysis_plugins.centroid_plugin')
         ]
 
@@ -328,10 +328,10 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, 'My Demo Program!')
         frame.Show(True)
 
-        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5002)]
-        udpPort = 5001
-#        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
-#        udpPort = 5000
+#        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5002)]
+#        udpPort = 5001
+        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
+        udpPort = 5000
 
         self.node = ad3.models.dht.MyNode(udpPort=udpPort)
         print "->", "joining network..."
