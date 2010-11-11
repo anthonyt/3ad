@@ -12,7 +12,7 @@ def euclidean_distance(a, b):
     return sqrt(sum_of_squares)
 
 class Euclidean(object):
-    def __init__(self, data_model, tolerable_distance = 31):
+    def __init__(self, data_model, tolerable_distance = 15):
         self.model = data_model
         self.tolerance = tolerable_distance
 
