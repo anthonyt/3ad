@@ -424,10 +424,7 @@ class MyApp(wx.App):
         frame = MyMenu(None, -1, 'My Demo Program!')
         frame.Show(True)
 
-#        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5002)]
-#        udpPort = 5001
-        knownNodes = [('127.0.0.1', 5001), ('127.0.0.1', 5002)]
-        udpPort = 5000
+        knownNodes = [('127.0.0.1', 5000), ('127.0.0.1', 5001), ('127.0.0.1', 5002)]
         udpPort = int(sys.argv[1])
 
 
