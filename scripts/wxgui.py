@@ -347,8 +347,6 @@ class MyMenu(wx.Frame):
         in_class = [False, False, True, True, False, False, True]
 
 #        # instantiate our classifiers
-#        gaussian = Gaussian(self.model, 100)
-#        svm = SVM(self.model)
 #        euclidean_distance = euclid.euclidean_distance
 
         # Get all instances in the class
@@ -466,9 +464,18 @@ from ad3.controller import Controller
 
 defer.setDebugging(True)
 
+# Our Model
 model = ad3.models.dht
+
+# Our classifiers
 euclidean = Euclidean(model)
-controller = Controller(model, euclidean)
+gaussian = Gaussian(model, 100)
+svm = SVM(model)
+
+
+
+# Our controller
+controller = Controller(model, svm)
 
 app = MyApp(0)
 
