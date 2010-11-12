@@ -245,16 +245,24 @@ def mycallback(file):
     print "EOF"
 
 if __name__ == "__main__":
+    console = logging.StreamHandler()
+    logger.addHandler(console)
+    logger.setLevel(logging.DEBUG)
+
     client = len(sys.argv) > 1
     hostname = 'localhost'
+    hostname = '127.0.0.1'
     port = 4000
     file = '/Users/anthony/cp.sh'
     url = 'http://%s:%d%s' % (hostname, port, file)
+    print "Requesting", url
+    url = file
 
     clientKey = 'abcdefg'
     serverKeys = dict(zomg='not the file', bob='jimmy', abcdefg=file)
 
     if client:
+        print "Requesting", url
         clientFactory = HTTPClientFactory(mycallback, clientKey, url, timeout=0)
         reactor.connectTCP(hostname, port, clientFactory)
     else:
