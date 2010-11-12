@@ -10,6 +10,7 @@ import entangled.dtuple
 import entangled.kademlia.contact
 import entangled.kademlia.msgtypes
 from entangled.kademlia.node import rpcmethod
+from entangled.kademlia.protocol import KademliaProtocol
 from time import time
 from sets import Set
 from twisted.internet import defer
@@ -867,6 +868,55 @@ def guess_tag_for_file(audio_file, tag):
     df.callback(None)
 
     return outer_df
+
+class MyProtocol(entangled.kademlia.protocol.KademliaProtocol):
+    def sendRPC(self, contact, method, args, rawResponse=False):
+        print "-->> myprotocol: sendRPC(", contact, ",", method
+        outer_df = defer.Deferred()
+
+        def error(failure):
+            print "myprotocol: ERROR", failure
+            outer_df.errback(failure)
+            return failure
+
+        def got_response(val):
+            print "myprotocol: GOT RESPONSE", val
+            outer_df.callback(val)
+            return val
+
+        def actually_send(val):
+            print "myprotocol: SENDING (", method, ",", args, ",", rawResponse,")"
+            df = KademliaProtocol.sendRPC(self, contact, method, args, rawResponse)
+            return df
+
+        # the deferred returned by this is what _dht_df waits for
+        # it should get called back as soon as we get a response message
+        def handle_dfs(val):
+            print "<<---------->>"
+            print "myprotocol: HANDLING DFS"
+            df = defer.Deferred()
+            def done(val):
+                print "myprotocol: DONE"
+                import time
+                time.sleep(0.1)
+                print "myprotocol: Continuing..."
+                df.callback(None)
+
+            inner_df = defer.Deferred()
+            inner_df.addCallback(actually_send)
+            inner_df.addCallback(got_response)
+            inner_df.addErrback(error)
+            inner_df.addBoth(done)
+            inner_df.callback(None)
+
+            return df
+
+        # should execute immediately
+        _dht_df.addCallback(handle_dfs)
+
+        # should get called back as soon as msg returns.
+        print "--<< myprotocol: RETURNING outer_df"
+        return outer_df
 
 class MyNode(entangled.dtuple.DistributedTupleSpacePeer):
     def sendOffloadCommand(self, key, value):
