@@ -106,10 +106,7 @@ class ObjectAggregator(object):
 #            logger.debug("-> Searching for key.. %r", key.encode('hex'))
             o = self.net_handler.cache_get_obj(key)
             if o is not None:
-                self.objects.append(o)
-                if len(self.objects) == len(self.key_list):
-                    # FIXME: this could well be a race condition with the similar statement above
-                    callback(self.objects)
+                got_obj(o)
             else:
                 df = self.net_handler.dht_get_value(key)
                 df.addCallback(got_value)
