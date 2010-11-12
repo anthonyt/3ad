@@ -16,9 +16,8 @@ class Euclidean(object):
         self.tolerance = tolerable_distance
 
 
-    def calculate_tag_vector(self, callback, tag):
+    def calculate_tag_vector(self, tag):
         outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
 
         def got_files(files):
             vector = mean([f.vector for f in files], axis=0).tolist()

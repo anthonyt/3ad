@@ -154,53 +154,32 @@ class Controller(object):
         return outer_df
 
 
-    def create_vectors(self, callback, file, plugin_name=None):
+    def create_vectors(self, file, plugin_name=None):
         outer_df = defer.Deferred()
-        outer_df.addCallback(callback)
-
-        df = defer.Deferred()
         #    get_plugins
         # -> got_plugins
         # -> update_plugin_vector (for each plugin)
-        # -> update_file_vector
-        # -> got_file_vector
-        # -> save_file
+        # -> calculate_file_vector
+        # -> got_file_vector (save file)
         # -> outer_df.callback
 
-        def update_plugin_vector(val, plugin):
-            u_df = self.model.update_vector(plugin, file)
-            return u_df
-
-        def got_file_vector(vector):
-            def save_file(val):
-                file.vector = vector
-                print "->", "Updating vector for", file
-                s_df = self.model.save(file)
-                return s_df
-
-            # after we finish saving the file, trigger the outer_df callback
-            df.addCallback(save_file)
-            df.addCallback(outer_df.callback)
-
-        def update_file_vector(val):
-            m_df = self.mine.calculate_file_vector(got_file_vector, file)
-            return m_df
-
+        def calculate_file_vector(val):
+            # this deferred will pass the calculated vector onto the next callback
+            df = self.mine.calculate_file_vector(file)
+            return df
 
         def got_plugins(plugins):
+            deferreds = []
             for plugin in plugins:
                 #print "->", "Creating vector for", file, plugin
-                df.addCallback(update_plugin_vector, plugin)
+                df = self.model.update_vector(plugin, file)
+                deferreds.append(df)
 
-            df.addCallback(update_file_vector)
+            df_list = defer.DeferredList(deferreds, consumeErrors=1)
+            df_list.addCallback(calculate_file_vector)
+            df_list.addCallback(outer_df.callback)
 
-
-        def get_plugins(val):
-            # take care of fetching the plugin objects...
-            self.model.get_plugins(got_plugins, name=plugin_name)
-
-        df.addCallback(get_plugins)
-        df.callback(None)
+        self.model.get_plugins(got_plugins, name=plugin_name)
 
         return outer_df
 
@@ -245,34 +224,36 @@ class Controller(object):
         return outer_df
 
 
-    def add_file(self, callback, file_name, user_name=None, tags=[]):
+    def add_file(self, callback, file_name, user_name=None, tags=None):
         df = defer.Deferred()
         outer_df = defer.Deferred()
         outer_df.addCallback(callback)
 
+        if tags is None:
+            tags = []
+
         def got_file(file):
-            #print "\n"
             if file is None:
                 file = AudioFile(file_name, user_name=user_name)
 
-                def save_file(val):
+                def save_file(vector):
+                    file.vector = vector
                     save_df = self.model.save(file)
                     return save_df
 
-                def create_vectors(val):
-                    def lmk(val):
-                        print "LETTING YOU KNOW THAT VECTORS HAVE BEEN CREATED", val
-                    v_df = self.create_vectors(lmk, file)
-                    return v_df
+                def lmk(vector):
+                    print "LETTING YOU KNOW THAT VECTORS HAVE BEEN CREATED"
+                    return vector
 
-                def fire_outer_df(val):
+                def done(val):
                     outer_df.callback((file, True))
 
+                df.addCallback(self.create_vectors)
+                df.addCallback(lmk)
                 df.addCallback(save_file)
-                df.addCallback(create_vectors)
 
                 if len(tags) == 0:
-                    df.addCallback(fire_outer_df)
+                    df.addCallback(done)
                 else:
                     def got_tags(tags):
                         def apply(value, file, tag):
@@ -283,7 +264,7 @@ class Controller(object):
                         for t in tags:
                             df.addCallback(apply, file, t)
 
-                        df.addCallback(fire_outer_df)
+                        df.addCallback(done)
 
                     def get_tags(val):
                         ta = TagAggregator(self, self.model, tags, True)
@@ -292,7 +273,8 @@ class Controller(object):
 
                     df.addCallback(get_tags)
 
-                df.callback('fired')
+                # Pass "file" to our first callback
+                df.callback(file)
             else:
                 # if a matching file already exists, return None to the callback method
                 # and signal outer_df as being completed.
@@ -340,20 +322,24 @@ class Controller(object):
 
         df = defer.Deferred()
 
-        def send_callback(val, plugin):
-            outer_df.callback(plugin)
-
         def got_plugin(plugin):
             if plugin is None:
+                # If the plugin doesn't exist, create it and return it to the callback
                 plugin = Plugin(name, module_name)
+
                 def save_plugin(val):
                     s_df = self.model.save(plugin)
                     return s_df
 
+                def done(val):
+                    outer_df.callback(plugin)
+
                 df.addCallback(save_plugin)
-                df.addCallback(send_callback, plugin)
-                df.callback(plugin)
+                df.addCallback(done)
+
+                df.callback(None)
             else:
+                # If it does exist, return None to the callback.
                 outer_df.callback(None)
 
         self.model.get_plugin(got_plugin, name=name, module_name=module_name)
