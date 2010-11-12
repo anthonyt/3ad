@@ -11,6 +11,9 @@ from twisted.internet import reactor
 import twisted.web.http as twh
 import twisted.web.client as twc
 
+import logging
+logger = logging.getLogger('3ad_http')
+
 class Request(twh.Request):
     """Created by the HTTPServer to service a requeset from an HTTPClient"""
     def __init__(self, channel, queued):
@@ -19,12 +22,14 @@ class Request(twh.Request):
         self.server = self.channel
 
     def process(self):
+        logger.debug("Serving: %r", self.path)
         """
         Called when a request completes (and all data is received)
         """
         # Make sure this request had a useful request_key
         request_keys = self.requestHeaders.getRawHeaders('x-request-key', None)
         if not request_keys:
+            logger.debug("No request keys were set in this request.")
             return
         request_key = request_keys[0]
 
@@ -32,11 +37,14 @@ class Request(twh.Request):
         # try to remove it from the list of pending request_keys
         requested_file = self.server.factory.get_request_key(request_key)
         if not requested_file:
+            logger.debug("Requested file %r was not set to readable.", request_key)
             return
 
         # Make sure the file requested by the client (self.path) is the one we
         # wanted to give them (requested_file).
         if not requested_file == self.path:
+            logger.debug("Client requested %r, but I was prepared to serve %r",
+                    self.path, requested_file)
             return
 
         # If we got here, we know that this was a valid and pending request
@@ -98,6 +106,7 @@ class HTTPServerFactory(twh.HTTPFactory):
     def add_request_key(self, key, file_name):
         # TODO: Add a timeout, so that no key can sit in the list for longer
         # than x seconds
+        logger.debug("Adding request key: %r -> %r", key, file_name)
         return self._prk_mux.lock(
                 self._unsafe_add_request_key, (key, file_name)
         )
@@ -107,6 +116,7 @@ class HTTPServerFactory(twh.HTTPFactory):
         self._prk_mux.lock(
                 self._unsafe_get_request_key, (key, struct)
         )
+        logger.debug("Getting request key: %r -> %r", key, struct[0])
         return struct[0]
 
 
@@ -125,6 +135,7 @@ class HTTPClient(twh.HTTPClient):
         self.receivingFile = False
 
     def sendFileRequest(self, filename):
+        logger.debug("Sending file request; GET %r", filename)
         self.sendCommand('GET', filename)
         self.sendHeader('x-request-key', self.factory.request_key)
         self.endHeaders()
@@ -149,6 +160,7 @@ class HTTPClient(twh.HTTPClient):
         @type status: C{str}
         @param message: e.g. 'OK'
         """
+        logger.debug("Got status %r: %r", status, message)
         if status == '200':
             self.receivingFile = True
 
@@ -215,6 +227,15 @@ class HTTPClientFactory(twc.HTTPClientFactory):
 
         self.callback = callback
         self.request_key = key
+
+    def clientConnectionLost(self, connector, reason):
+        logger.debug('Lost connection.  Reason: %r', reason)
+        twc.HTTPClientFactory.clientConnectionLost(self, connector, reason)
+
+    def clientConnectionFailed(self, connector, reason):
+        logger.debug('Connection failed. Reason: %r', reason)
+        twc.HTTPClientFactory.clientConnectionFailed(self, connector, reason)
+
 
 
 import sys
