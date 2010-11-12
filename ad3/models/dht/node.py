@@ -24,6 +24,29 @@ import logging
 logger = logging.getLogger('3ad')
 
 class Node(entangled.dtuple.DistributedTupleSpacePeer):
+    def __init__(self, id=None, udpPort=4000, tcpPort=4000,
+                 dataStore=None, routingTable=None,
+                 networkProtocol=None, oobProtocol=protocol.OOBProtocol):
+
+        entangled.dtuple.DistributedTupleSpacePeer.__init__(
+            self, id=id, udpPort=udpPort, dataStore=dataStore,
+            routingTable=routingTable, networkProtocol=networkProtocol
+        )
+
+        self.oobPort = tcpPort
+        self._oobListeningPort = None
+        self._oobFactory = None
+        self._oobProtocol = oobProtocol
+
+    def joinNetwork(self, knownNodeAddresses=None):
+        entangled.dtuple.DistributedTupleSpacePeer.joinNetwork(
+            self, knownNodeAddresses=knownNodeAddresses
+        )
+
+        self._oobFactory = ServerFactory()
+        self._oobFactory.protocol = self._oobProtocol
+        self._oobListeningPort = listenTCP(self.oobPort, self._oobFactory)
+
     def sendOffloadCommand(self, key, struct):
         hash = {
             'module_name': struct['module_name'],

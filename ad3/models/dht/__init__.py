@@ -1,5 +1,6 @@
 from dht import *
 from node import *
+from protocol import *
 
 __all__ = [
     # dht.* functions
@@ -32,4 +33,7 @@ __all__ = [
 
     # node.* classes
     'Node',
+
+    # protocol.* classes
+    'OOBProtocol',
 ]
