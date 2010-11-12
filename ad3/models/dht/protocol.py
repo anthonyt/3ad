@@ -2,6 +2,7 @@
 import tempfile
 import os
 import mutex
+import urllib
 # entangled
 import entangled
 import entangled.dtuple
@@ -41,15 +42,16 @@ class Request(twh.Request):
         # If we got here, we know that this was a valid and pending request
         content = self.content
         method = self.method # (get, post, etc)
+        file_name = urllib.unquote(self.path)
 
         # Set our headers
         # TODO: Maybe specify content-type as audio/x-wav, audio/mpeg, etc.
-        length = os.path.getsize(self.path)
+        length = os.path.getsize(file_name)
         self.setHeader('content-length', str(int(length)))
         self.setHeader('content-type', 'application/octet-stream')
 
         # Read the file and send it in 4kb chunks
-        file = open(self.path, 'rb')
+        file = open(file_name, 'rb')
         chunk_size = 4096
         while True:
             chunk = file.read(chunk_size)
