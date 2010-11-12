@@ -273,7 +273,7 @@ class NetworkHandler(object):
         store the object in our cache
         with an end of life timestamp
         """
-        lifetime = int(time()) + 30
+        lifetime = int(time()) + 300
         self._cache[key] = (lifetime, obj)
 
     def cache_get_tuples(self, search_tuple):
@@ -311,7 +311,7 @@ class NetworkHandler(object):
                 sanitized.append(t.encode('base64'))
         key = simplejson.dumps(sanitized)
 
-        lifetime = int(time()) + 30
+        lifetime = int(time()) + 10
         self._cache[key] = (lifetime, result_tuples)
 
 _network_handler = None
