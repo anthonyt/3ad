@@ -468,11 +468,11 @@ model = ad3.models.dht
 
 # Our classifiers
 euclidean = Euclidean(model)
-gaussian = Gaussian(model, 100)
+gaussian = Gaussian(model, 80)
 svm = SVM(model)
 
 # Our controller
-controller = Controller(model, svm)
+controller = Controller(model, gaussian)
 
 # Our User
 user_name = sys.argv[2]
