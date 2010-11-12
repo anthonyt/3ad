@@ -220,15 +220,19 @@ class MyMenu(wx.Frame):
 #            (u"old_audio/Cello note a.wav", [u"cello", u"strings"]),
 #            (u"old_audio/Cello note c.wav", [u"cello", u"strings"]),
 #            (u"old_audio/Cello note g.wav", [u"cello", u"strings"]),
-            (u"old_audio/MattP - Allemanda - Partita No. 6 in E minor.m4a.wav", [u"piano"]),
-            (u"old_audio/MattP - Sonata in A Major D664.wav", [u"piano"]),
-            (u"old_audio/MattP - To Zanarkand.m4a.wav", [u"piano"]),
-            (u"old_audio/MattP - Eyes On Me.m4a.wav", [u"piano"]),
-            (u"old_audio/MattP - Sonata in A Major D664.wav", [u"piano"]),
+#            (u"old_audio/MattP - Allemanda - Partita No. 6 in E minor.m4a.wav", [u"piano"]),
+#            (u"old_audio/MattP - Sonata in A Major D664.wav", [u"piano"]),
+#            (u"old_audio/MattP - To Zanarkand.m4a.wav", [u"piano"]),
+#            (u"old_audio/MattP - Eyes On Me.m4a.wav", [u"piano"]),
+#            (u"old_audio/MattP - Sonata in A Major D664.wav", [u"piano"]),
 #            ("audio/Cello note a.wav", []),
 #            ("audio/Cello note c.wav", []),
 #            ("audio/Cello note g.wav", [])
 #            (str(int(time.time())), [])
+            (u"matt p/MattP - Terra's Theme.m4a.wav", [u"piano"]),
+            (u"matt p/MattP - To Zanarkand.m4a.wav", [u"piano"]),
+            (u"matt p/MattP - Sonata in A Major D664.wav", [u"piano"]),
+            (u"matt p/MattP - Theme to Voyager.m4a.wav", [u"piano"])
         ]
 
         plugins = [
@@ -272,7 +276,7 @@ class MyMenu(wx.Frame):
         # add callbacks for adding files
 #        for (file_name, tags) in file_data:
 #            df.addCallback(add_file, file_name, tags)
-        fs = [u"/Users/anthony/"+f for (f, t) in file_data]
+        fs = [u"/Users/anthony/Documents/3ad_audio/new_audio/"+f for (f, t) in file_data]
         ts = [u"piano", u"twisted"]
         df.addCallback(add_files, fs, ts)
         def p(val):
