@@ -270,8 +270,16 @@ class MyMenu(wx.Frame):
             df.addCallback(add_plugin, name, module_name)
 
         # add callbacks for adding files
-        for (file_name, tags) in file_data:
-            df.addCallback(add_file, file_name, tags)
+#        for (file_name, tags) in file_data:
+#            df.addCallback(add_file, file_name, tags)
+        fs = [u"/Users/anthony/"+f for (f, t) in file_data]
+        ts = [u"piano", u"twisted"]
+        df.addCallback(add_files, fs, ts)
+        def p(val):
+            print "P CALLED"
+            print val
+
+        df.addCallback(p)
 
         # start the callback chain
         df.callback('First val')
@@ -445,7 +453,7 @@ class MyApp(wx.App):
         udpPort = int(sys.argv[1])
 
 
-        self.node = ad3.models.dht.MyNode(udpPort=udpPort)
+        self.node = ad3.models.dht.MyNode(udpPort=udpPort)#, networkProtocol=ad3.models.dht.MyProtocol)
         print "->", "joining network..."
         self.node.joinNetwork(knownNodes)
         print "->", "joined network..."
