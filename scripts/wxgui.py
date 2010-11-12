@@ -168,6 +168,11 @@ class MyMenu(wx.Frame):
 
     def AddFiles(self, event):
         file_dlg = wx.FileDialog(self, "Choose a file", os.getcwd(), "", "", wx.OPEN | wx.MULTIPLE)
+        num_files = 0
+        num_finished = [0]
+
+        def done(val):
+            self.statusbar.SetStatusText("All New Files Added!")
 
         def file_added(result):
             (file, added) = result
@@ -179,7 +184,7 @@ class MyMenu(wx.Frame):
                 return "file_added_false"
             print "--->", "added", file, file.key.encode('hex')
 
-        def add_file(val, file_name, tags):
+        def add_file(file_name, tags):
             add_df = self.controller.add_file(file_added, file_name, user_name=user_name, tags=tags)
             return add_df
 
@@ -197,11 +202,15 @@ class MyMenu(wx.Frame):
                 tag_names = []
             txt_dlg.Destroy()
 
+            num_files = len(files)
+
             # start the adding
-            df = defer.Deferred()
+            deferreds = []
             for file_name in files:
-                df.addCallback(add_file, file_name, tag_names)
-            df.callback(None)
+                deferreds.append(add_file(file_name, tag_names))
+            df = defer.DefferedList(deferreds, consumeErrors=1)
+            df.addCallback(done)
+            self.statusbar.SetStatusText(". . . Adding Files . . .")
 
         file_dlg.Destroy()
 
@@ -248,6 +257,10 @@ class MyMenu(wx.Frame):
             add_df = self.controller.add_file(file_added, file_name, user_name=user_name, tags=tags)
             return add_df
 
+        def add_files(val, fs, ts):
+            add_df = self.controller.add_files(fs, user_name=user_name, tags=ts)
+            return add_df
+
         def add_plugin(val, name, module_name):
             p_df = self.controller.add_plugin(plugin_added, name, module_name)
             return p_df
@@ -266,11 +279,15 @@ class MyMenu(wx.Frame):
     def UpdateTagVectors(self, event):
         def updated(val):
             print "->", "Tag Vectors Updated"
+            self.statusbar.SetStatusText("Tag Vectors Updated!")
+        self.statusbar.SetStatusText(". . . Updating Tag Vectors . . .")
         df = self.controller.update_tag_vectors(updated)
 
     def UpdateGuessedTags(self, event):
         def updated(val):
             print "->", "Guessed Tags Updated"
+            self.statusbar.SetStatusText("Tags Guessed!")
+        self.statusbar.SetStatusText(". . . Guessing new Tags . . .")
         df = self.controller.guess_tags(updated, user_name=user_name)
 
     def SearchFiles(self, event):
