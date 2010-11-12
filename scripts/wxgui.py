@@ -278,6 +278,7 @@ class MyMenu(wx.Frame):
         def p(val):
             print "P CALLED"
             print val
+            self.UpdateTagVectors(event)
 
         df.addCallback(p)
 
